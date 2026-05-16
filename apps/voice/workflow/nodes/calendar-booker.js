@@ -47,6 +47,20 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
     return { waitForInput: true };
   }
 
+  if (outcome === "unavailable_time") {
+    // User asked for a specific time that isn't in the available slots — re-offer what we have.
+    const freshSlots = await fetchSlots(node, session, interpolate);
+    if (freshSlots && freshSlots.length > 0) {
+      session.calendarSlots = freshSlots;
+      const description = await slotsToNaturalLanguage(freshSlots.slice(0, 3), timezone);
+      await speak(session, `I'm sorry, that time isn't available. ${description}`);
+    } else {
+      await speak(session, "I'm sorry, that time isn't available and there are no other slots right now. I'll have the team follow up with you.");
+      return { waitForInput: false, nextNodeId: node.nextNodeId };
+    }
+    return { waitForInput: true };
+  }
+
   // outcome === "selected_slot"
   const booking = await createBooking(node, session, slotTime, interpolate);
   send(session.clientWs, { type: "workflow.calendar.result", nodeId: node.id, ok: booking.ok, message: booking.message });

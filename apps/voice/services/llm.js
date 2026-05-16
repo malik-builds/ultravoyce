@@ -100,7 +100,8 @@ export async function slotsToNaturalLanguage(flatSlots, timezone) {
   return choices[0]?.message?.content?.trim() || "I have some slots available. Which would you prefer?";
 }
 
-// Determines whether the user selected a slot, declined, or was unclear.
+// Determines whether the user selected a slot, declined, requested an unavailable time, or was unclear.
+// flatSlots should be ALL available slots (not just the 3 displayed) so the LLM can check availability.
 export async function parseSlotSelection(utterance, flatSlots, timezone) {
   const { choices } = await openai.chat.completions.create({
     model: OPENAI_TEXT_MODEL,
@@ -109,7 +110,15 @@ export async function parseSlotSelection(utterance, flatSlots, timezone) {
     messages: [
       {
         role: "system",
-        content: `A caller was offered these time slots (timezone: ${timezone}): ${JSON.stringify(flatSlots.slice(0, 5))}. Determine their response. Return JSON: {"outcome": "selected_slot"|"declined"|"unclear", "slotTime": "<ISO string or null>"}. If they name a time not in the list, set outcome to "unclear".`,
+        content: `A caller is selecting a booking time. ALL available slots (timezone: ${timezone}) are: ${JSON.stringify(flatSlots.slice(0, 20))}.
+
+Determine their intent:
+- They pick/mention a time that IS in the available slots → outcome: "selected_slot", slotTime: <exact ISO from list>
+- They decline or say they don't want to book → outcome: "declined", slotTime: null
+- They request a specific time that is NOT in the available slots → outcome: "unavailable_time", slotTime: null
+- Intent is unclear → outcome: "unclear", slotTime: null
+
+Return JSON: {"outcome": "selected_slot"|"declined"|"unavailable_time"|"unclear", "slotTime": "<ISO or null>"}`,
       },
       { role: "user", content: utterance },
     ],
