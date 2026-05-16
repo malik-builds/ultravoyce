@@ -231,6 +231,7 @@
       let sourceBuffer = null;
       let audioQueue = [];
       let mediaSourceOpen = false;
+      let streamEnding = false;
 
       function setStatus(text, state = "active") {
         statusTextEl.textContent = text;
@@ -329,6 +330,7 @@
         sourceBuffer = null;
         mediaSourceOpen = false;
         audioQueue = [];
+        streamEnding = false;
         ttsAudio.src = URL.createObjectURL(mediaSource);
 
         mediaSource.addEventListener("sourceopen", () => {
@@ -341,8 +343,13 @@
       }
 
       function flushAudioQueue() {
-        if (!sourceBuffer || sourceBuffer.updating || !audioQueue.length) return;
-        sourceBuffer.appendBuffer(audioQueue.shift());
+        if (!sourceBuffer || sourceBuffer.updating) return;
+        if (audioQueue.length) {
+          sourceBuffer.appendBuffer(audioQueue.shift());
+        } else if (streamEnding && mediaSource && mediaSource.readyState === "open") {
+          try { mediaSource.endOfStream(); } catch { /* ignore */ }
+          streamEnding = false;
+        }
       }
 
       function enqueueAudioChunk(base64) {
@@ -352,12 +359,10 @@
       }
 
       function finishAudioStream() {
-        if (!mediaSource || mediaSource.readyState !== "open") return;
-        try {
-          mediaSource.endOfStream();
-        } catch {
-          // ignore
-        }
+        // Don't call endOfStream() immediately — queue may still have chunks to append.
+        // Set the flag and let flushAudioQueue() call it once the queue drains.
+        streamEnding = true;
+        flushAudioQueue();
       }
 
       function sendPcmChunk(floatChunk) {

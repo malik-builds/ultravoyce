@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import { ELEVENLABS_API_KEY, ELEVENLABS_TTS_URL, TTS_TIMEOUT_MS, TTS_SENTENCE_FLUSH_REGEX } from "../config.js";
+import { log } from "./log.js";
 
 export function streamTTS(text, onChunk) {
   return new Promise((resolve, reject) => {
@@ -28,6 +29,7 @@ export function streamTTS(text, onChunk) {
     timeoutId = setTimeout(() => fail(new Error("TTS stream timeout")), TTS_TIMEOUT_MS);
 
     socket.once("open", () => {
+      log.debug("TTS", "ElevenLabs socket open — sending text");
       socket.send(JSON.stringify({
         text: " ",
         voice_settings: { stability: 0.4, similarity_boost: 0.8, use_speaker_boost: true },
@@ -50,7 +52,11 @@ export function streamTTS(text, onChunk) {
       try {
         const data = JSON.parse(raw.toString());
         if (data.audio) onChunk(data.audio);
-        if (data.isFinal) { socket.close(); done(); }
+        if (data.isFinal) {
+          log.debug("TTS", "ElevenLabs isFinal received — closing socket");
+          socket.close();
+          done();
+        }
       } catch (err) {
         fail(err);
       }

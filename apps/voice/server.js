@@ -6,28 +6,27 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { mkdir } from "fs/promises";
 
-import { PORT, RECORDINGS_DIR, WORKFLOW_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY, MAX_RECORDING_BYTES } from "./config.js";
+import {
+  PORT, RECORDINGS_DIR, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+  DEV_WORKFLOW_PATH, ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY,
+} from "./config.js";
+import { log } from "./services/log.js";
 import { loadFromFile, loadFromSupabase } from "./workflow/loader.js";
 import { createSession, finalizeSession, sendToClient, startAutoHangupTimer, enforceRecordingCap } from "./workflow/session.js";
 import { processUntilInput, handleUserInput } from "./workflow/runtime.js";
 import { connectSTT, sendAudioChunk } from "./services/stt.js";
 import { healthRouter } from "./routes/health.js";
-import { workflowRouter } from "./routes/workflow.js";
 import { sessionsRouter } from "./routes/sessions.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// ─── State ───────────────────────────────────────────────────────────────────
-let workflowDefinition = null;
 const sessions = new Map();
+const useSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
 
-// ─── Express app ─────────────────────────────────────────────────────────────
+// ─── Express app ──────────────────────────────────────────────────────────────
 const app = express();
-app.use(express.json({ limit: "2mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/vendor/three", express.static(path.join(__dirname, "node_modules", "three", "build")));
-app.use(healthRouter(() => workflowDefinition));
-app.use(workflowRouter(() => workflowDefinition, (wf) => { workflowDefinition = wf; }));
+app.use(healthRouter(() => useSupabase ? "supabase" : DEV_WORKFLOW_PATH));
 app.use(sessionsRouter());
 
 // ─── WebSocket server ─────────────────────────────────────────────────────────
@@ -38,17 +37,40 @@ server.on("upgrade", (request, socket, head) => {
   socket.on("error", (err) => console.error("Socket upgrade error:", err));
   const { pathname } = new URL(request.url, "http://localhost");
   if (pathname !== "/ws") { socket.destroy(); return; }
-  wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws));
+  wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
 });
 
-wss.on("connection", async (ws) => {
-  if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY || !workflowDefinition) {
-    sendToClient(ws, { type: "error", message: "Server missing API keys or workflow definition." });
-    ws.close(1011, "missing configuration");
+wss.on("connection", async (ws, request) => {
+  if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY) {
+    sendToClient(ws, { type: "error", message: "Server is missing required API keys." });
+    ws.close(1011, "missing api keys");
     return;
   }
 
   ws.on("error", (err) => console.error("WebSocket error:", err));
+
+  // Load the workflow for this connection
+  let workflowDefinition;
+  try {
+    if (useSupabase) {
+      const url = new URL(request.url, "http://localhost");
+      const workflowId = url.searchParams.get("workflowId");
+      if (!workflowId) {
+        sendToClient(ws, { type: "error", message: "workflowId query parameter is required." });
+        ws.close(1008, "missing workflowId");
+        return;
+      }
+      workflowDefinition = await loadFromSupabase(workflowId);
+    } else {
+      // Dev mode: load the default local file regardless of query params
+      workflowDefinition = await loadFromFile(DEV_WORKFLOW_PATH);
+    }
+  } catch (err) {
+    console.error("Workflow load failed:", err);
+    sendToClient(ws, { type: "error", message: err.message || "Failed to load workflow." });
+    ws.close(1011, "workflow load failed");
+    return;
+  }
 
   let session;
   try {
@@ -59,6 +81,7 @@ wss.on("connection", async (ws) => {
       try { event = JSON.parse(raw.toString()); } catch { return; }
 
       if (event.message_type === "session_started") {
+        log.info("STT", "session_started — STT ready, starting workflow");
         sendToClient(ws, { type: "stt.ready" });
         session.queue = session.queue
           .then(() => processUntilInput(session))
@@ -69,19 +92,38 @@ wss.on("connection", async (ws) => {
       }
 
       if (event.message_type === "partial_transcript") {
+        log.debug("STT", "partial_transcript", { text: event.text, isSpeaking: session.isSpeaking });
         sendToClient(ws, { type: "transcript.partial", text: event.text || "" });
       }
 
       if (event.message_type === "committed_transcript") {
         const transcript = String(event.text || "").trim();
-        if (!transcript || session.closed || session.isSpeaking) return;
+        if (!transcript) {
+          log.debug("STT", "committed_transcript ignored — empty");
+          return;
+        }
+        if (session.closed) {
+          log.debug("STT", "committed_transcript ignored — session closed", { transcript });
+          return;
+        }
+        if (session.isSpeaking) {
+          log.warn("STT", "committed_transcript DROPPED — barge-in while speaking", { transcript });
+          return;
+        }
+        if (session.isProcessing) {
+          log.warn("STT", "committed_transcript DROPPED — still processing previous turn", { transcript });
+          return;
+        }
+        log.info("STT", "committed_transcript — queueing handleUserInput", { transcript, awaitingInput: session.awaitingInput });
         session.lastAudioAt = Date.now();
+        session.isProcessing = true;
         session.queue = session.queue
           .then(() => handleUserInput(session, transcript))
           .catch((err) => {
             console.error("Workflow turn error:", err);
             sendToClient(ws, { type: "error", message: "Workflow processing failed for this turn." });
-          });
+          })
+          .finally(() => { session.isProcessing = false; });
       }
     });
 
@@ -89,7 +131,6 @@ wss.on("connection", async (ws) => {
     sessions.set(ws, session);
 
     sendToClient(ws, { type: "session.started", sessionId: session.sessionId });
-    sendToClient(ws, { type: "call.state", state: "connected" });
     sendToClient(ws, { type: "workflow.started", workflowId: workflowDefinition.workflow.id });
   } catch (err) {
     console.error("Session init failed:", err);
@@ -98,7 +139,10 @@ wss.on("connection", async (ws) => {
     return;
   }
 
-  startAutoHangupTimer(session, ws, () => ws.close(1000, "auto hangup"));
+  startAutoHangupTimer(session, ws, () => {
+    session.autoHangup = true;
+    ws.close(1000, "auto hangup");
+  });
 
   ws.on("message", async (data, isBinary) => {
     const current = sessions.get(ws);
@@ -108,7 +152,10 @@ wss.on("connection", async (ws) => {
 
       if (message.type === "audio.chunk" && typeof message.audio === "string") {
         current.lastAudioAt = Date.now();
-        startAutoHangupTimer(current, ws, () => ws.close(1000, "auto hangup"));
+        startAutoHangupTimer(current, ws, () => {
+          current.autoHangup = true;
+          ws.close(1000, "auto hangup");
+        });
 
         const pcmBytes = Buffer.from(message.audio, "base64");
         if (!enforceRecordingCap(current, ws, pcmBytes.length)) {
@@ -139,7 +186,13 @@ wss.on("connection", async (ws) => {
     const current = sessions.get(ws);
     sessions.delete(ws);
     if (!current) return;
-    await finalizeSession(current, current.stopRequested ? "user_ended" : "socket_closed").catch((err) => {
+
+    let reason = "socket_closed";
+    if (current.workflowCompleted) reason = "workflow_completed";
+    else if (current.stopRequested) reason = "user_ended";
+    else if (current.autoHangup) reason = "auto_hangup";
+
+    await finalizeSession(current, reason).catch((err) => {
       console.error("Finalize on close failed:", err);
     });
   });
@@ -148,22 +201,15 @@ wss.on("connection", async (ws) => {
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 async function bootstrap() {
   await mkdir(RECORDINGS_DIR, { recursive: true });
-
-  if (WORKFLOW_ID && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-    console.log(`Loading workflow ${WORKFLOW_ID} from Supabase...`);
-    workflowDefinition = await loadFromSupabase(WORKFLOW_ID);
-  } else {
-    workflowDefinition = await loadFromFile();
-  }
-
   server.listen(PORT, () => {
+    const mode = useSupabase ? "Supabase (per-connection)" : `dev file: ${DEV_WORKFLOW_PATH}`;
     console.log(`Voice server listening on http://localhost:${PORT}`);
-    console.log(`Loaded workflow: ${workflowDefinition.workflow.name} (${workflowDefinition.workflow.id})`);
+    console.log(`Workflow source: ${mode}`);
     if (ALLOW_LOCAL_WEBHOOKS) console.warn("⚠️  ALLOW_LOCAL_WEBHOOKS=true — local webhook URLs are permitted");
   });
 }
 
 bootstrap().catch((err) => {
-  console.error("Failed to bootstrap voice server:", err);
+  console.error("Failed to bootstrap:", err);
   process.exit(1);
 });

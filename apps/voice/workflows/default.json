@@ -96,7 +96,7 @@
         },
         "nextNodeId": "node_action_01",
         "config": {
-          "calComEventTypeId": 42,
+          "calComEventTypeId": 5583730,
           "calComApiKey": "{{ secrets.CAL_COM_API_KEY }}",
           "timezone": "Asia/Colombo",
           "bookingConfirmationVariable": "bookingConfirmed",

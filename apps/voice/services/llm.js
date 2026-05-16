@@ -33,7 +33,15 @@ export async function extractFields(session, utterance, fields) {
   });
 
   const parsed = JSON.parse(choices[0]?.message?.content || "{}");
-  return parsed.values && typeof parsed.values === "object" ? parsed.values : {};
+  // LLM sometimes wraps in `values`, sometimes returns the map directly
+  if (parsed.values && typeof parsed.values === "object" && !Array.isArray(parsed.values)) {
+    return parsed.values;
+  }
+  // If parsed itself looks like a variable map (has at least one of the expected keys), use it directly
+  const fieldVars = new Set(fields.map((f) => f.variable));
+  const directKeys = Object.keys(parsed).filter((k) => fieldVars.has(k));
+  if (directKeys.length > 0) return parsed;
+  return {};
 }
 
 export async function classifyIntent(session, node, utterance) {
@@ -56,6 +64,61 @@ export async function classifyIntent(session, node, utterance) {
 
   const parsed = JSON.parse(choices[0]?.message?.content || "{}");
   return String(parsed.value || "").trim();
+}
+
+// Extracts a single string value from a free-form utterance using LLM.
+export async function extractSingleValue(utterance, description) {
+  const { choices } = await openai.chat.completions.create({
+    model: OPENAI_TEXT_MODEL,
+    temperature: 0.1,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `Extract the ${description} from the user's message. Return JSON: {"value": "<extracted>"} or {"value": null} if not present.`,
+      },
+      { role: "user", content: utterance },
+    ],
+  });
+  const parsed = JSON.parse(choices[0]?.message?.content || "{}");
+  return parsed.value != null ? String(parsed.value) : null;
+}
+
+// Converts raw cal.com slot objects into a natural spoken description.
+export async function slotsToNaturalLanguage(flatSlots, timezone) {
+  const { choices } = await openai.chat.completions.create({
+    model: OPENAI_TEXT_MODEL,
+    temperature: 0.4,
+    messages: [
+      {
+        role: "system",
+        content: `You are a voice booking assistant. Convert these available time slots into ONE short sentence listing up to 3 options, then ask "Which works for you?" Keep it under 25 words total. Use day names and times only (e.g. "Monday at 10am, 2pm, or Wednesday at 9am"). Timezone: ${timezone}.`,
+      },
+      { role: "user", content: `Available slots (ISO): ${JSON.stringify(flatSlots.slice(0, 3))}` },
+    ],
+  });
+  return choices[0]?.message?.content?.trim() || "I have some slots available. Which would you prefer?";
+}
+
+// Determines whether the user selected a slot, declined, or was unclear.
+export async function parseSlotSelection(utterance, flatSlots, timezone) {
+  const { choices } = await openai.chat.completions.create({
+    model: OPENAI_TEXT_MODEL,
+    temperature: 0.1,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `A caller was offered these time slots (timezone: ${timezone}): ${JSON.stringify(flatSlots.slice(0, 5))}. Determine their response. Return JSON: {"outcome": "selected_slot"|"declined"|"unclear", "slotTime": "<ISO string or null>"}. If they name a time not in the list, set outcome to "unclear".`,
+      },
+      { role: "user", content: utterance },
+    ],
+  });
+  const parsed = JSON.parse(choices[0]?.message?.content || "{}");
+  return {
+    outcome: parsed.outcome || "unclear",
+    slotTime: parsed.slotTime || null,
+  };
 }
 
 export async function answerQuery(session, node, utterance) {

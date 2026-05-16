@@ -13,7 +13,7 @@ export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "Xb7hH8MSUJpSbSDYk0k2";
 export const ELEVENLABS_TTS_MODEL = process.env.ELEVENLABS_TTS_MODEL || "eleven_flash_v2_5";
 export const ELEVENLABS_STT_URL =
-  "wss://api.elevenlabs.io/v1/speech-to-text/realtime?model_id=scribe_v2_realtime&audio_format=pcm_24000&commit_strategy=vad";
+  "wss://api.elevenlabs.io/v1/speech-to-text/realtime?model_id=scribe_v2_realtime&audio_format=pcm_24000&commit_strategy=vad&vad_silence_duration_ms=1000";
 export const ELEVENLABS_TTS_URL = () =>
   `wss://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream-input?model_id=${ELEVENLABS_TTS_MODEL}`;
 
@@ -24,7 +24,8 @@ export const OPENAI_TEXT_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-4o-mini";
 // Supabase
 export const SUPABASE_URL = process.env.SUPABASE_URL;
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-export const WORKFLOW_ID = process.env.WORKFLOW_ID;
+// Dev fallback: when Supabase is not configured, load this file instead
+export const DEV_WORKFLOW_PATH = process.env.WORKFLOW_PATH || path.join(__dirname, "workflows", "default.json");
 
 // Behaviour
 export const AUTO_HANGUP_MS = Number(process.env.AUTO_HANGUP_MS || 30000);

@@ -1,8 +1,7 @@
 import { answerQuery } from "../../services/llm.js";
 
 // Answers free-form questions from a knowledge base for up to maxTurns exchanges.
-export async function enter({ session, node, speak }) {
-  await speak(session, "Go ahead. What would you like to know?");
+export async function enter({ session }) {
   session.answerTurns = 0;
   return { waitForInput: true };
 }
