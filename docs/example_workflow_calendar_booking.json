@@ -1,0 +1,92 @@
+{
+  "workflow": {
+    "id": "wf_calendar_booking_01",
+    "name": "Calendar Booking Agent",
+    "version": 1,
+    "description": "Collects the caller's contact details and books an appointment via cal.com.",
+    "createdAt": "2026-05-16T08:00:00Z",
+    "updatedAt": "2026-05-16T08:00:00Z",
+
+    "trigger": {
+      "type": "inbound_websocket",
+      "config": {
+        "connectorId": "conn_abc123"
+      }
+    },
+
+    "globalVariables": {
+      "customerName":     { "type": "string",  "value": null },
+
+      "customerEmail":    { "type": "string",  "value": null },
+      "customerPhone":    { "type": "string",  "value": null },
+      "bookingConfirmed": { "type": "boolean", "value": false },
+      "bookingId":        { "type": "string",  "value": null },
+      "bookingTime":      { "type": "string",  "value": null }
+    },
+
+    "entryNodeId": "node_tell_01",
+
+    "nodes": [
+      {
+        "id": "node_tell_01",
+        "type": "tell",
+        "label": "Greet caller",
+        "position": { "x": 300, "y": 60 },
+        "nextNodeId": "node_getdetails_01",
+        "config": {
+          "message": "Hi there! I can help you book an appointment. Let me grab a few details from you first."
+        }
+      },
+
+      {
+        "id": "node_getdetails_01",
+        "type": "get_details",
+        "label": "Collect contact info",
+        "position": { "x": 300, "y": 180 },
+        "nextNodeId": "node_calendar_01",
+        "config": {
+          "prompt": "Collect the caller's name, email address, and phone number to make a booking.",
+          "fields": [
+            {
+              "variable": "customerName",
+              "description": "The caller's full name",
+              "type": "string",
+              "required": true
+            },
+            {
+              "variable": "customerEmail",
+              "description": "The caller's email address for the booking confirmation",
+              "type": "string",
+              "required": true
+            },
+            {
+              "variable": "customerPhone",
+              "description": "The caller's contact phone number",
+              "type": "string",
+              "required": false
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "node_calendar_01",
+        "type": "calendar_booker",
+        "label": "Book appointment",
+        "position": { "x": 300, "y": 340 },
+        "nextNodeId": null,
+        "config": {
+          "calComEventTypeId": 42,
+          "calComApiKey": "{{ secrets.CAL_COM_API_KEY }}",
+          "timezone": "Asia/Colombo",
+          "bookingConfirmationVariable": "bookingConfirmed",
+          "bookingIdVariable": "bookingId",
+          "bookingTimeVariable": "bookingTime",
+          "attendeeNameVariable": "customerName",
+          "attendeeEmailVariable": "customerEmail",
+          "confirmationMessage": "All done, {{ customerName }}! You're booked in for {{ bookingTime }}. A confirmation will be sent to {{ customerEmail }}."
+        }
+      }
+    ]
+  }
+}
