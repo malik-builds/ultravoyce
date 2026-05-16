@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ultravoyce Workflow Call</title>
+    <style>
+      :root {
+        --bg: #06080f;
+        --card: rgba(16, 21, 34, 0.72);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #f2f5ff;
+        --muted: #b9c1dd;
+        --accent: #7c86ff;
+        --good: #44d086;
+        --danger: #ff586f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Inter, "SF Pro Display", "Segoe UI", sans-serif;
+        color: var(--text);
+        background: var(--bg);
+        overflow-x: hidden;
+      }
+      #bg-canvas {
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+      }
+      #bg-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background: radial-gradient(circle at 20% 15%, rgba(124, 134, 255, 0.24) 0%, rgba(6, 8, 15, 0.76) 45%),
+          radial-gradient(circle at 80% 30%, rgba(68, 208, 134, 0.12) 0%, rgba(6, 8, 15, 0.86) 40%),
+          linear-gradient(180deg, rgba(6, 8, 15, 0.35) 0%, rgba(6, 8, 15, 0.9) 100%);
+      }
+      .container {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 2rem 1.1rem 2.5rem;
+      }
+      .header {
+        margin-bottom: 1rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.8rem;
+        letter-spacing: 0.01em;
+      }
+      .subtitle {
+        margin: 0.4rem 0 0;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: 1.2fr 0.8fr;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--card);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        padding: 1rem;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.7rem;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 0.74rem 1.1rem;
+        font-weight: 650;
+        cursor: pointer;
+        transition: transform 0.08s ease, opacity 0.2s ease;
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      button[disabled] {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      #startBtn {
+        background: linear-gradient(120deg, #6d7dff 0%, #4d64ff 100%);
+        color: #fff;
+      }
+      #endBtn {
+        background: linear-gradient(120deg, #ff6f86 0%, #ff4f68 100%);
+        color: #fff;
+      }
+      .pill {
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.06);
+        padding: 0.35rem 0.75rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+      .meter {
+        margin-top: 0.8rem;
+        height: 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.09);
+        overflow: hidden;
+      }
+      .meter-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #8b93ff 0%, #44d086 100%);
+        transition: width 0.08s linear;
+      }
+      .live-line {
+        min-height: 1.6rem;
+        margin-top: 0.5rem;
+      }
+      .log {
+        max-height: 360px;
+        overflow: auto;
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
+      .turn-user {
+        color: #abd3ff;
+      }
+      .turn-assistant {
+        color: #93f0c1;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.4rem 0.7rem;
+        font-size: 0.92rem;
+      }
+      .kv .k {
+        color: var(--muted);
+      }
+      .required-list {
+        margin: 0.3rem 0 0;
+        padding-left: 1.2rem;
+        color: #ffd8a8;
+      }
+      @media (max-width: 980px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="bg-canvas"></canvas>
+    <div id="bg-overlay"></div>
+    <div class="container">
+      <div class="header">
+        <h1>Ultravoyce Workflow Runtime</h1>
+        <p class="subtitle">Realtime speech call with node-by-node workflow execution.</p>
+      </div>
+      <div class="grid">
+        <section class="card">
+          <div class="controls">
+            <button id="startBtn">Start Call</button>
+            <button id="endBtn" disabled>Decline Call</button>
+            <span class="pill" id="callStatePill">idle</span>
+            <span id="statusText">Ready</span>
+          </div>
+          <div class="live-line" id="partial">Waiting to start...</div>
+          <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+        </section>
+
+        <section class="card">
+          <strong>Workflow State</strong>
+          <div class="kv" style="margin-top: 0.8rem;">
+            <span class="k">Node</span><span id="wfNode">-</span>
+            <span class="k">Type</span><span id="wfType">-</span>
+            <span class="k">Label</span><span id="wfLabel">-</span>
+          </div>
+          <div style="margin-top: 0.8rem;">
+            <div class="k">Pending required fields</div>
+            <ul id="requiredList" class="required-list"></ul>
+          </div>
+          <div style="margin-top: 0.8rem;">
+            <div class="k">Variables</div>
+            <pre id="varsView" style="white-space: pre-wrap; margin: 0.35rem 0 0; color: #d6dcf6;"></pre>
+          </div>
+        </section>
+
+        <section class="card">
+          <strong>Conversation</strong>
+          <div class="log" id="log"></div>
+        </section>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as THREE from "/vendor/three/three.module.js";
+
+      const TARGET_SAMPLE_RATE = 24000;
+      const PCM_CHUNK_MIN_SAMPLES = 2048;
+
+      const startBtn = document.getElementById("startBtn");
+      const endBtn = document.getElementById("endBtn");
+      const statusTextEl = document.getElementById("statusText");
+      const callStatePill = document.getElementById("callStatePill");
+      const partialEl = document.getElementById("partial");
+      const logEl = document.getElementById("log");
+      const meterFill = document.getElementById("meterFill");
+      const wfNode = document.getElementById("wfNode");
+      const wfType = document.getElementById("wfType");
+      const wfLabel = document.getElementById("wfLabel");
+      const requiredList = document.getElementById("requiredList");
+      const varsView = document.getElementById("varsView");
+
+      let ws = null;
+      let mediaStream = null;
+      let audioContext = null;
+      let sourceNode = null;
+      let scriptNode = null;
+      let stopped = true;
+      let sttReady = false;
+      let ttsAudio = null;
+      let mediaSource = null;
+      let sourceBuffer = null;
+      let audioQueue = [];
+      let mediaSourceOpen = false;
+
+      function setStatus(text, state = "active") {
+        statusTextEl.textContent = text;
+        callStatePill.textContent = state;
+      }
+
+      function appendTranscript(role, text) {
+        const value = String(text || "").trim();
+        if (!value) return;
+        const line = document.createElement("div");
+        line.className = role === "assistant" ? "turn-assistant" : "turn-user";
+        line.textContent = `${role === "assistant" ? "AI" : "You"}: ${value}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function updateWorkflowState(message) {
+        wfNode.textContent = message.nodeId || "-";
+        wfType.textContent = message.nodeType || "-";
+        wfLabel.textContent = message.nodeLabel || "-";
+        varsView.textContent = JSON.stringify(message.variables || {}, null, 2);
+        requiredList.innerHTML = "";
+        const pending = Array.isArray(message.pendingRequired) ? message.pendingRequired : [];
+        if (!pending.length) {
+          const li = document.createElement("li");
+          li.textContent = "None";
+          requiredList.appendChild(li);
+          return;
+        }
+        for (const field of pending) {
+          const li = document.createElement("li");
+          li.textContent = field;
+          requiredList.appendChild(li);
+        }
+      }
+
+      function floatTo16BitPCM(input) {
+        const output = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i += 1) {
+          const sample = Math.max(-1, Math.min(1, input[i]));
+          output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        }
+        return output;
+      }
+
+      function downsampleBuffer(buffer, inputRate, outputRate) {
+        if (outputRate === inputRate) return buffer;
+        if (outputRate > inputRate) throw new Error("Output sample rate must be <= input sample rate");
+        const ratio = inputRate / outputRate;
+        const result = new Float32Array(Math.round(buffer.length / ratio));
+        let offsetResult = 0;
+        let offsetBuffer = 0;
+        while (offsetResult < result.length) {
+          const next = Math.round((offsetResult + 1) * ratio);
+          let accum = 0;
+          let count = 0;
+          for (let i = offsetBuffer; i < next && i < buffer.length; i += 1) {
+            accum += buffer[i];
+            count += 1;
+          }
+          result[offsetResult] = count > 0 ? accum / count : 0;
+          offsetResult += 1;
+          offsetBuffer = next;
+        }
+        return result;
+      }
+
+      function int16ToBase64(int16Array) {
+        const bytes = new Uint8Array(int16Array.buffer);
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+      }
+
+      function decodeBase64ToUint8Array(base64) {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i += 1) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+      }
+
+      function setupStreamingPlayback() {
+        if (ttsAudio) {
+          ttsAudio.pause();
+          if (ttsAudio.src) URL.revokeObjectURL(ttsAudio.src);
+          ttsAudio.src = "";
+        }
+        ttsAudio = new Audio();
+        mediaSource = new MediaSource();
+        sourceBuffer = null;
+        mediaSourceOpen = false;
+        audioQueue = [];
+        ttsAudio.src = URL.createObjectURL(mediaSource);
+
+        mediaSource.addEventListener("sourceopen", () => {
+          mediaSourceOpen = true;
+          sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+          sourceBuffer.mode = "sequence";
+          sourceBuffer.addEventListener("updateend", flushAudioQueue);
+          flushAudioQueue();
+        });
+      }
+
+      function flushAudioQueue() {
+        if (!sourceBuffer || sourceBuffer.updating || !audioQueue.length) return;
+        sourceBuffer.appendBuffer(audioQueue.shift());
+      }
+
+      function enqueueAudioChunk(base64) {
+        if (!mediaSourceOpen || !sourceBuffer) return;
+        audioQueue.push(decodeBase64ToUint8Array(base64));
+        flushAudioQueue();
+      }
+
+      function finishAudioStream() {
+        if (!mediaSource || mediaSource.readyState !== "open") return;
+        try {
+          mediaSource.endOfStream();
+        } catch {
+          // ignore
+        }
+      }
+
+      function sendPcmChunk(floatChunk) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || !sttReady) return;
+        const downsampled = downsampleBuffer(floatChunk, audioContext.sampleRate, TARGET_SAMPLE_RATE);
+        if (downsampled.length < PCM_CHUNK_MIN_SAMPLES) return;
+        const pcm16 = floatTo16BitPCM(downsampled);
+        ws.send(JSON.stringify({ type: "audio.chunk", audio: int16ToBase64(pcm16) }));
+      }
+
+      function stopAudioCapture() {
+        if (scriptNode) {
+          scriptNode.disconnect();
+          scriptNode.onaudioprocess = null;
+        }
+        scriptNode = null;
+        if (sourceNode) sourceNode.disconnect();
+        sourceNode = null;
+        if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+        if (audioContext) audioContext.close();
+        audioContext = null;
+      }
+
+      async function startCall() {
+        if (startBtn.disabled) return;
+        if (ws && ws.readyState === WebSocket.OPEN) return;
+
+        startBtn.disabled = true;
+        endBtn.disabled = false;
+        stopped = false;
+        sttReady = false;
+        logEl.textContent = "";
+        partialEl.textContent = "Connecting...";
+        setStatus("Connecting", "connecting");
+
+        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+        ws.onmessage = (event) => {
+          let message;
+          try {
+            message = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+          if (message.type === "session.started") {
+            setStatus("Session started", "starting");
+          } else if (message.type === "stt.ready") {
+            sttReady = true;
+            setStatus("Listening", "listening");
+            partialEl.textContent = "You're live. Start speaking.";
+          } else if (message.type === "workflow.state") {
+            updateWorkflowState(message);
+          } else if (message.type === "transcript.partial") {
+            partialEl.textContent = `You: ${message.text || ""}`;
+          } else if (message.type === "transcript.final") {
+            appendTranscript(message.role === "assistant" ? "assistant" : "user", message.text);
+            if (message.role !== "assistant") partialEl.textContent = "Processing node...";
+          } else if (message.type === "assistant.final") {
+            appendTranscript("assistant", message.text);
+          } else if (message.type === "assistant.speaking") {
+            setStatus("Speaking", "speaking");
+            setupStreamingPlayback();
+          } else if (message.type === "assistant.audio.chunk") {
+            enqueueAudioChunk(message.audio);
+            if (ttsAudio && ttsAudio.paused) ttsAudio.play().catch(() => {});
+          } else if (message.type === "assistant.speaking.done") {
+            finishAudioStream();
+            setStatus("Listening", "listening");
+            partialEl.textContent = "Your turn.";
+          } else if (message.type === "workflow.completed") {
+            partialEl.textContent = "Workflow complete.";
+          } else if (message.type === "call.auto_hangup") {
+            partialEl.textContent = "Call ended due to inactivity.";
+            endCall(false);
+          } else if (message.type === "error") {
+            setStatus("Error", "error");
+            partialEl.textContent = message.message || "Unknown server error";
+          }
+        };
+
+        ws.onerror = () => {
+          setStatus("Connection error", "error");
+        };
+
+        ws.onclose = () => {
+          endCall(false);
+        };
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TARGET_SAMPLE_RATE });
+        await audioContext.resume();
+
+        sourceNode = audioContext.createMediaStreamSource(mediaStream);
+        scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+        const silent = audioContext.createGain();
+        silent.gain.value = 0;
+        scriptNode.onaudioprocess = (event) => {
+          if (stopped || !ws || ws.readyState !== WebSocket.OPEN) return;
+          const input = event.inputBuffer.getChannelData(0);
+          const copy = new Float32Array(input.length);
+          copy.set(input);
+          sendPcmChunk(copy);
+
+          let peak = 0;
+          for (let i = 0; i < copy.length; i += 1) peak = Math.max(peak, Math.abs(copy[i]));
+          meterFill.style.width = `${Math.min(100, peak * 220)}%`;
+        };
+
+        sourceNode.connect(scriptNode);
+        scriptNode.connect(silent);
+        silent.connect(audioContext.destination);
+      }
+
+      function endCall(sendEvent = true) {
+        if (stopped) return;
+        stopped = true;
+        sttReady = false;
+        meterFill.style.width = "0%";
+        stopAudioCapture();
+        finishAudioStream();
+        if (ttsAudio) {
+          ttsAudio.pause();
+          if (ttsAudio.src) URL.revokeObjectURL(ttsAudio.src);
+          ttsAudio.src = "";
+        }
+
+        if (sendEvent && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "call.end" }));
+        }
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close(1000, "client ended");
+        }
+        ws = null;
+        startBtn.disabled = false;
+        endBtn.disabled = true;
+        setStatus("Ended", "ended");
+        partialEl.textContent = "Call ended. Start again when ready.";
+      }
+
+      function initBackground() {
+        const canvas = document.getElementById("bg-canvas");
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.z = 9;
+
+        const count = 900;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(count * 3);
+        for (let i = 0; i < count; i += 1) {
+          positions[i * 3] = (Math.random() - 0.5) * 18;
+          positions[i * 3 + 1] = (Math.random() - 0.5) * 14;
+          positions[i * 3 + 2] = (Math.random() - 0.5) * 12;
+        }
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        const material = new THREE.PointsMaterial({
+          color: 0x92a5ff,
+          size: 0.045,
+          transparent: true,
+          opacity: 0.8,
+        });
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        function resize() {
+          renderer.setSize(window.innerWidth, window.innerHeight, false);
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+        }
+        resize();
+        window.addEventListener("resize", resize);
+
+        function animate(t) {
+          particles.rotation.y = t * 0.00008;
+          particles.rotation.x = Math.sin(t * 0.00014) * 0.06;
+          renderer.render(scene, camera);
+          requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+      }
+
+      startBtn.addEventListener("click", () => {
+        startCall().catch((error) => {
+          console.error(error);
+          setStatus("Failed to start", "error");
+          partialEl.textContent = "Could not start call.";
+          stopAudioCapture();
+          if (ws && ws.readyState === WebSocket.OPEN) ws.close(1011, "start failed");
+          ws = null;
+          startBtn.disabled = false;
+          endBtn.disabled = true;
+        });
+      });
+      endBtn.addEventListener("click", () => endCall(true));
+      initBackground();
+    </script>
+  </body>
+</html>
