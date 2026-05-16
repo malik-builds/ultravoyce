@@ -61,7 +61,7 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
     const freshSlots = await fetchSlots(node, session, interpolate);
     if (freshSlots && freshSlots.length > 0) {
       session.calendarSlots = freshSlots;
-      const description = await slotsToNaturalLanguage(freshSlots, timezone);
+      const description = await slotsToNaturalLanguage(freshSlots.slice(0, 3), timezone);
       await speak(session, description);
     }
     return { waitForInput: true };
