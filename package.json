@@ -5,7 +5,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "mintest" : "turbo run dev --filter=\"{voice,phone}\"",
-    "builder" : "turbo run dev --filter=\"{builder}\"",
+    "builder": "turbo run dev --filter=builder",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
