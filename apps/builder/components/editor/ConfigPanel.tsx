@@ -165,8 +165,8 @@ function NodeConfigFields({
         calComApiKey: string;
         timezone: string;
         bookingConfirmationVariable: string;
-        bookingIdVariable: string;
-        bookingTimeVariable: string;
+        bookingIdVariable?: string;
+        bookingTimeVariable?: string;
         attendeeNameVariable: string;
         attendeeEmailVariable: string;
         confirmationMessage: string;
@@ -229,16 +229,28 @@ function NodeConfigFields({
               type="boolean"
             />
           </Field>
-          <Field label="Booking ID variable">
+          <Field label="Booking ID variable" hint="Optional — cal.com booking id or uid">
             <VariablePicker
-              value={c.bookingIdVariable}
-              onChange={(v) => patchConfig({ ...c, bookingIdVariable: v })}
+              value={c.bookingIdVariable ?? ""}
+              onChange={(v) =>
+                patchConfig({
+                  ...c,
+                  bookingIdVariable: v || undefined,
+                })
+              }
+              optional
             />
           </Field>
-          <Field label="Booking time variable">
+          <Field label="Booking time variable" hint="Optional — confirmed start time">
             <VariablePicker
-              value={c.bookingTimeVariable}
-              onChange={(v) => patchConfig({ ...c, bookingTimeVariable: v })}
+              value={c.bookingTimeVariable ?? ""}
+              onChange={(v) =>
+                patchConfig({
+                  ...c,
+                  bookingTimeVariable: v || undefined,
+                })
+              }
+              optional
             />
           </Field>
           <Field label="Confirmation message">
@@ -541,14 +553,21 @@ function NodeConfigFields({
 
 function Field({
   label,
+  hint,
   children,
 }: {
   label: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <label className="block">
       <span className="field-label">{label}</span>
+      {hint && (
+        <span className="mb-1 block text-[10px] text-[var(--text-tertiary)]">
+          {hint}
+        </span>
+      )}
       {children}
     </label>
   );

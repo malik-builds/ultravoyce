@@ -62,12 +62,15 @@ Defines what causes the workflow to start. Currently only one trigger type is su
 
 ## Global variables
 
-A flat map of variables that persist across the entire conversation. All nodes can read from and write to this object. Variable values start as `null` and are populated as the conversation progresses.
+A flat map of variables that persist across the entire conversation. All nodes can read from and write to this object.
+
+Variables are **defined on the workflow itself**, not only when a node writes to them. You can declare names, types, and optional default values in `globalVariables` before building the canvas (or via the builder’s **Variables** drawer). Nodes such as **Ask question** and **Get details** then read and update those same keys; you do not need a node to create a variable first.
 
 ```json
 "globalVariables": {
-  "customerName":   { "type": "string",  "value": null },
-  "bookingConfirmed": { "type": "boolean", "value": false }
+  "customerName":     { "type": "string",  "value": null },
+  "bookingConfirmed": { "type": "boolean", "value": false },
+  "supportLine":      { "type": "string",  "value": "+94112345678" }
 }
 ```
 
@@ -76,9 +79,9 @@ Each entry is keyed by the variable name and has two fields:
 | Field | Type | Description |
 |---|---|---|
 | `type` | string | `"string"`, `"boolean"`, or `"number"` |
-| `value` | any | Initial value; `null` means not yet collected |
+| `value` | any | Initial value at workflow start. Use `null` when the value should be collected during the call; set a concrete value when you want a constant available everywhere (e.g. a default phone number). |
 
-Variables are referenced anywhere in node config strings using `{{ variableName }}` syntax. The runtime substitutes the current value before passing text to the LLM or making API calls.
+Variables are referenced anywhere in node config strings using `{{ variableName }}` syntax. The runtime substitutes the current value before passing text to the LLM or making API calls. If a variable is `null` at substitution time, it renders as an empty string.
 
 ---
 
@@ -231,11 +234,13 @@ Retrieves available time slots from cal.com, presents them to the caller in natu
 | `calComApiKey` | string | API key, referenced via `{{ secrets.KEY_NAME }}` |
 | `timezone` | string | IANA timezone for presenting available slots to the caller |
 | `bookingConfirmationVariable` | string | Global variable to set `true` on successful booking |
-| `bookingIdVariable` | string | Global variable to store the cal.com booking ID |
-| `bookingTimeVariable` | string | Global variable to store the confirmed booking time as a string |
-| `attendeeNameVariable` | string | Global variable containing the attendee's name |
+| `bookingIdVariable` | string | **Optional.** Global variable to store the cal.com booking identifier (`data.id` or `data.uid` from the [create booking](https://cal.com/docs/api-reference/v2/bookings/create-a-booking) response). Omit if you do not need the ID in later nodes or webhooks. |
+| `bookingTimeVariable` | string | **Optional.** Global variable to store the confirmed start time (e.g. from `data.start` in the create-booking response, formatted for the caller). Omit if the confirmation message does not reference a time variable. |
+| `attendeeNameVariable` | string | Global variable containing the attendee's name (maps to `attendee.name` in the API request) |
 | `attendeeEmailVariable` | string | Global variable containing the attendee's email |
 | `confirmationMessage` | string | Message spoken to the caller after booking; supports `{{ variable }}` interpolation |
+
+The runtime calls `POST /v2/bookings` with `eventTypeId`, `start` (UTC ISO 8601), and `attendee` built from the configured variables. On success, it writes outputs only into the variable names you configure above.
 
 ---
 

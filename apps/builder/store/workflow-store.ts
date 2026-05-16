@@ -9,6 +9,7 @@ import {
 } from "@/lib/workflow/defaults";
 import { inferEntryNodeId } from "@/lib/workflow/flow";
 import type {
+  DetailField,
   GlobalVariable,
   NodeConfig,
   NodeType,
@@ -64,7 +65,11 @@ interface WorkflowStore {
   disconnectNodes: (fromId: string, sourceHandle?: string | null) => void;
   setEntryNode: (id: string) => void;
   setSelectedNode: (id: string | null) => void;
-  addGlobalVariable: (name: string, type: VariableType) => void;
+  addGlobalVariable: (
+    name: string,
+    type: VariableType,
+    value?: string | number | boolean | null,
+  ) => void;
   updateGlobalVariable: (
     oldName: string,
     name: string,
@@ -340,12 +345,12 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
   setSelectedNode: (id) => set({ selectedNodeId: id }),
 
-  addGlobalVariable: (name, type) => {
+  addGlobalVariable: (name, type, value = null) => {
     if (!name.trim() || get().globalVariables[name]) return;
     set({
       globalVariables: {
         ...get().globalVariables,
-        [name]: { type, value: null },
+        [name]: { type, value: value ?? null },
       },
       isDirty: true,
     });
@@ -362,12 +367,44 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
       globalVariables: vars,
       nodes: get().nodes.map((n) => {
         if (n.type === "ask_question") {
-          const c = n.config as { storeIn: string };
+          const c = n.config as {
+            question: string;
+            storeIn: string;
+            variableType: VariableType;
+          };
           if (c.storeIn === oldName) {
+            return { ...n, config: { ...c, storeIn: name } };
+          }
+        }
+        if (n.type === "get_details") {
+          const c = n.config as { prompt: string; fields: DetailField[] };
+          if (c.fields.some((f) => f.variable === oldName)) {
             return {
               ...n,
-              config: { ...c, storeIn: name },
+              config: {
+                ...c,
+                fields: c.fields.map((f) =>
+                  f.variable === oldName ? { ...f, variable: name } : f,
+                ),
+              },
             };
+          }
+        }
+        if (n.type === "calendar_booker") {
+          const c = n.config as Record<string, string | number | undefined>;
+          const keys = [
+            "bookingConfirmationVariable",
+            "bookingIdVariable",
+            "bookingTimeVariable",
+            "attendeeNameVariable",
+            "attendeeEmailVariable",
+          ] as const;
+          if (keys.some((k) => c[k] === oldName)) {
+            const next = { ...c };
+            for (const k of keys) {
+              if (next[k] === oldName) next[k] = name;
+            }
+            return { ...n, config: next as typeof n.config };
           }
         }
         return n;

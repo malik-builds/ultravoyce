@@ -8,6 +8,8 @@ interface VariablePickerProps {
   onChange: (value: string) => void;
   type?: VariableType;
   allowCreate?: boolean;
+  /** When true, empty selection is allowed (e.g. optional calendar outputs). */
+  optional?: boolean;
 }
 
 export function VariablePicker({
@@ -15,6 +17,7 @@ export function VariablePicker({
   onChange,
   type = "string",
   allowCreate = true,
+  optional = false,
 }: VariablePickerProps) {
   const globalVariables = useWorkflowStore((s) => s.globalVariables);
   const ensureVariable = useWorkflowStore((s) => s.ensureVariable);
@@ -40,7 +43,9 @@ export function VariablePicker({
         if (v) ensureVariable(v, type);
       }}
     >
-      <option value="">Select variable…</option>
+      <option value="">
+        {optional ? "None (optional)" : "Select variable…"}
+      </option>
       {names.map((n) => (
         <option key={n} value={n}>
           {n} ({globalVariables[n]?.type})

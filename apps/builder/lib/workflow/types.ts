@@ -51,8 +51,8 @@ export type NodeConfig =
       calComApiKey: string;
       timezone: string;
       bookingConfirmationVariable: string;
-      bookingIdVariable: string;
-      bookingTimeVariable: string;
+      bookingIdVariable?: string;
+      bookingTimeVariable?: string;
       attendeeNameVariable: string;
       attendeeEmailVariable: string;
       confirmationMessage: string;
