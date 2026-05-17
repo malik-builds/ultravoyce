@@ -261,6 +261,91 @@
         grid-column: 1 / -1;
       }
 
+      /* Workflow picker */
+      .workflow-picker {
+        margin-bottom: var(--space-4);
+      }
+
+      .workflow-picker-label {
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
+        margin-bottom: var(--space-2);
+      }
+
+      .workflow-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        max-height: 200px;
+        overflow-y: auto;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .workflow-option {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: var(--space-3);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: border-color var(--transition), background var(--transition);
+      }
+
+      .workflow-option:hover:not([disabled]) {
+        border-color: var(--border-strong);
+        background: var(--bg-hover);
+      }
+
+      .workflow-option:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-dim);
+      }
+
+      .workflow-option[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: var(--accent-dim);
+      }
+
+      .workflow-option[disabled] {
+        cursor: default;
+        opacity: 0.7;
+      }
+
+      .workflow-option-name {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: var(--space-1);
+      }
+
+      .workflow-option-desc {
+        display: block;
+        font-size: 12px;
+        color: var(--text-secondary);
+        line-height: 1.35;
+      }
+
+      .workflow-picker-empty {
+        font-size: 12px;
+        color: var(--text-secondary);
+        padding: var(--space-3);
+        border-radius: var(--radius-input);
+        border: 1px dashed var(--border-default);
+        background: var(--bg-surface);
+      }
+
+      .workflow-picker-error {
+        color: var(--error);
+      }
+
       /* Call controls */
       .controls {
         display: flex;
@@ -571,8 +656,12 @@
               </svg>
               <h2 class="card-title">Call controls</h2>
             </div>
+            <div class="workflow-picker">
+              <div class="workflow-picker-label">Deployed workflow</div>
+              <ul class="workflow-list" id="workflowList" aria-label="Deployed workflows"></ul>
+            </div>
             <div class="controls">
-              <button type="button" class="btn btn-primary" id="startBtn">
+              <button type="button" class="btn btn-primary" id="startBtn" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z" />
                 </svg>
@@ -655,6 +744,7 @@
 
       const startBtn = document.getElementById("startBtn");
       const endBtn = document.getElementById("endBtn");
+      const workflowListEl = document.getElementById("workflowList");
       const statusTextEl = document.getElementById("statusText");
       const callStatePill = document.getElementById("callStatePill");
       const partialEl = document.getElementById("partial");
@@ -668,6 +758,7 @@
       const nodeStripe = document.getElementById("nodeStripe");
 
       let ws = null;
+      let selectedWorkflowId = null;
       let mediaStream = null;
       let audioContext = null;
       let sourceNode = null;
@@ -845,12 +936,97 @@
         audioContext = null;
       }
 
+      function selectWorkflow(id) {
+        selectedWorkflowId = id;
+        workflowListEl.querySelectorAll(".workflow-option").forEach((btn) => {
+          btn.setAttribute("aria-pressed", btn.dataset.workflowId === id ? "true" : "false");
+        });
+        startBtn.disabled = !id || !stopped;
+        const params = new URLSearchParams(window.location.search);
+        if (id) params.set("workflowId", id);
+        else params.delete("workflowId");
+        const qs = params.toString();
+        const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+        window.history.replaceState(null, "", next);
+      }
+
+      function renderWorkflowList(workflows) {
+        workflowListEl.textContent = "";
+        if (!workflows.length) {
+          const empty = document.createElement("li");
+          empty.className = "workflow-picker-empty";
+          empty.textContent = "No deployed workflows. Deploy one in the builder first.";
+          workflowListEl.appendChild(empty);
+          selectWorkflow(null);
+          return;
+        }
+
+        const urlWorkflowId = new URLSearchParams(window.location.search).get("workflowId");
+        let initialId = null;
+
+        for (const wf of workflows) {
+          const li = document.createElement("li");
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "workflow-option";
+          btn.dataset.workflowId = wf.id;
+          btn.setAttribute("aria-pressed", "false");
+          btn.innerHTML = `<span class="workflow-option-name"></span><span class="workflow-option-desc"></span>`;
+          btn.querySelector(".workflow-option-name").textContent = wf.name;
+          const desc = wf.description?.trim();
+          const descEl = btn.querySelector(".workflow-option-desc");
+          if (desc) {
+            descEl.textContent = desc;
+          } else {
+            descEl.remove();
+          }
+          btn.addEventListener("click", () => selectWorkflow(wf.id));
+          li.appendChild(btn);
+          workflowListEl.appendChild(li);
+
+          if (urlWorkflowId === wf.id) initialId = wf.id;
+        }
+
+        selectWorkflow(initialId ?? workflows[0].id);
+      }
+
+      async function loadDeployedWorkflows() {
+        workflowListEl.innerHTML =
+          '<li class="workflow-picker-empty">Loading deployed workflows…</li>';
+        startBtn.disabled = true;
+
+        try {
+          const response = await fetch("/workflows/deployed");
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || `Request failed (${response.status})`);
+          }
+          renderWorkflowList(data.workflows || []);
+        } catch (error) {
+          workflowListEl.innerHTML = "";
+          const item = document.createElement("li");
+          item.className = "workflow-picker-empty workflow-picker-error";
+          item.textContent = error.message || "Failed to load workflows";
+          workflowListEl.appendChild(item);
+          selectWorkflow(null);
+        }
+      }
+
       async function startCall() {
         if (startBtn.disabled) return;
         if (ws && ws.readyState === WebSocket.OPEN) return;
 
+        if (!selectedWorkflowId) {
+          setStatus("Select a workflow", "error");
+          partialEl.textContent = "Choose a deployed workflow above, then start the call.";
+          return;
+        }
+
         startBtn.disabled = true;
         endBtn.disabled = false;
+        workflowListEl.querySelectorAll(".workflow-option").forEach((btn) => {
+          btn.disabled = true;
+        });
         stopped = false;
         sttReady = false;
         logEl.textContent = "";
@@ -858,7 +1034,9 @@
         setStatus("Connecting", "connecting");
 
         const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+        ws = new WebSocket(
+          `${wsProtocol}//${window.location.host}/ws?workflowId=${encodeURIComponent(selectedWorkflowId)}`,
+        );
         ws.onmessage = (event) => {
           let message;
           try {
@@ -955,11 +1133,16 @@
           ws.close(1000, "client ended");
         }
         ws = null;
-        startBtn.disabled = false;
+        startBtn.disabled = !selectedWorkflowId;
         endBtn.disabled = true;
+        workflowListEl.querySelectorAll(".workflow-option").forEach((btn) => {
+          btn.disabled = false;
+        });
         setStatus("Ended", "ended");
         partialEl.textContent = "Call ended. Start again when ready.";
       }
+
+      loadDeployedWorkflows();
 
       startBtn.addEventListener("click", () => {
         startCall().catch((error) => {
@@ -969,8 +1152,12 @@
           stopAudioCapture();
           if (ws && ws.readyState === WebSocket.OPEN) ws.close(1011, "start failed");
           ws = null;
-          startBtn.disabled = false;
+          stopped = true;
+          startBtn.disabled = !selectedWorkflowId;
           endBtn.disabled = true;
+          workflowListEl.querySelectorAll(".workflow-option").forEach((btn) => {
+            btn.disabled = false;
+          });
         });
       });
       endBtn.addEventListener("click", () => endCall(true));

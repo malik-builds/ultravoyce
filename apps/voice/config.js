@@ -6,7 +6,6 @@ const __dirname = path.dirname(__filename);
 
 export const PORT = Number(process.env.PORT || 8001);
 export const RECORDINGS_DIR = path.join(__dirname, "recordings");
-export const WORKFLOW_PATH = process.env.WORKFLOW_PATH || path.join(__dirname, "workflows", "default.json");
 
 // ElevenLabs
 export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -21,11 +20,10 @@ export const ELEVENLABS_TTS_URL = () =>
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 export const OPENAI_TEXT_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-4o-mini";
 
-// Supabase
+// Supabase (service role / secret key for server-side reads)
 export const SUPABASE_URL = process.env.SUPABASE_URL;
-export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-// Dev fallback: when Supabase is not configured, load this file instead
-export const DEV_WORKFLOW_PATH = process.env.WORKFLOW_PATH || path.join(__dirname, "workflows", "default.json");
+export const SUPABASE_SECRET_KEY =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Behaviour
 export const AUTO_HANGUP_MS = Number(process.env.AUTO_HANGUP_MS || 30000);
