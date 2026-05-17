@@ -21,6 +21,9 @@ export const ELEVENLABS_STT_URL =
 export const VALSEA_API_KEY = process.env.VALSEA_API_KEY;
 export const VALSEA_STT_URL = "wss://api.valsea.ai/v1/realtime";
 
+// STT provider: "elevenlabs" (default, reliable) | "dual" (Valsea partials + ElevenLabs finals)
+export const STT_PROVIDER = process.env.STT_PROVIDER || "elevenlabs";
+
 // OpenAI
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 export const OPENAI_TEXT_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-4o-mini";

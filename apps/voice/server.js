@@ -8,7 +8,7 @@ import { mkdir } from "fs/promises";
 
 import {
   PORT, RECORDINGS_DIR, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-  DEV_WORKFLOW_PATH, ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY, VALSEA_API_KEY,
+  DEV_WORKFLOW_PATH, ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY, VALSEA_API_KEY, STT_PROVIDER,
 } from "./config.js";
 import { log } from "./services/log.js";
 import { loadFromFile, loadFromSupabase } from "./workflow/loader.js";
@@ -42,7 +42,8 @@ server.on("upgrade", (request, socket, head) => {
 });
 
 wss.on("connection", async (ws, request) => {
-  if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY || !VALSEA_API_KEY) {
+  const needsValsea = STT_PROVIDER === "dual";
+  if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY || (needsValsea && !VALSEA_API_KEY)) {
     sendToClient(ws, { type: "error", message: "Server is missing required API keys." });
     ws.close(1011, "missing api keys");
     return;
@@ -77,22 +78,22 @@ wss.on("connection", async (ws, request) => {
   try {
     session = await createSession(ws, workflowDefinition);
 
-    // ── Valsea STT: live partial transcript display only ──────────────────────
-    const valseaSocket = await connectValseaSTT((raw) => {
-      let event;
-      try { event = JSON.parse(raw.toString()); } catch { return; }
+    // ── Valsea STT: live partial transcript display only (dual mode) ──────────
+    let valseaSocket = null;
+    if (needsValsea) {
+      valseaSocket = await connectValseaSTT((raw) => {
+        let event;
+        try { event = JSON.parse(raw.toString()); } catch { return; }
 
-      if (event.type === "session.ready") {
-        log.info("STT", "Valsea session.ready — live transcript display active");
-      }
-
-      if (event.type === "transcript.partial") {
-        // Forward live partials to client for typing-effect display
-        sendToClient(ws, { type: "transcript.partial", text: event.text || "" });
-      }
-
-      // transcript.final from Valsea is intentionally ignored — ElevenLabs drives workflow
-    });
+        if (event.type === "session.ready") {
+          log.info("STT", "Valsea session.ready — live transcript display active");
+        }
+        if (event.type === "transcript.partial") {
+          sendToClient(ws, { type: "transcript.partial", text: event.text || "" });
+        }
+        // transcript.final from Valsea intentionally ignored — ElevenLabs drives workflow
+      });
+    }
 
     // ── ElevenLabs STT: authoritative finals that drive the workflow ──────────
     const elevenLabsSocket = await connectElevenLabsSTT((raw) => {
@@ -187,8 +188,8 @@ wss.on("connection", async (ws, request) => {
         const canContinue = current.audioStream.write(pcmBytes);
         if (!canContinue) await new Promise((r) => current.audioStream.once("drain", r));
 
-        // Send audio to both STT providers simultaneously
-        sendValseaChunk(current.valseaSttSocket, message.audio);
+        // Send audio to active STT providers
+        if (current.valseaSttSocket) sendValseaChunk(current.valseaSttSocket, message.audio);
         sendElevenLabsChunk(current.realtimeSttSocket, message.audio);
         return;
       }
