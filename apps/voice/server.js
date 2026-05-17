@@ -99,7 +99,7 @@ wss.on("connection", async (ws, request) => {
       let event;
       try { event = JSON.parse(raw.toString()); } catch { return; }
 
-      if (event.type === "session_started") {
+      if (event.message_type === "session_started") {
         log.info("STT", "ElevenLabs session_started — starting workflow");
         sendToClient(ws, { type: "stt.ready" });
         session.queue = session.queue
@@ -110,7 +110,7 @@ wss.on("connection", async (ws, request) => {
           });
       }
 
-      if (event.type === "committed_transcript") {
+      if (event.message_type === "committed_transcript") {
         const transcript = String(event.text || "").trim();
         if (!transcript) {
           log.debug("STT", "committed_transcript ignored — empty");
