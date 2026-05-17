@@ -56,7 +56,7 @@ export default function DeploymentsPage() {
           href="/workflows"
           className="font-mono text-sm font-medium text-[var(--text-primary)] hover:text-[var(--text-secondary)]"
         >
-          Sayerflow
+          Ultravoyce
         </Link>
         <div className="flex items-center gap-2">
           <Link href="/workflows" className="btn-ghost">

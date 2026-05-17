@@ -40,7 +40,7 @@ export function defaultConfig(type: NodeType): NodeConfig {
       return {
         webhookUrl: "",
         method: "POST",
-        payload: {},
+        payload: [],
         onSuccess: "continue",
         onFailure: "continue",
       };

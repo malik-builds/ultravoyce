@@ -206,6 +206,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         let config = n.config;
         if (n.type === "switch") {
           const c = config as {
+            prompt: string;
             cases: { value: string; label: string; nextNodeId: string | null }[];
             defaultCaseNextNodeId: string | null;
           };
@@ -245,6 +246,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     copy.nextNodeId = null;
     if (copy.type === "switch") {
       const c = copy.config as {
+        prompt: string;
         cases: { value: string; label: string; nextNodeId: string | null }[];
         defaultCaseNextNodeId: string | null;
       };

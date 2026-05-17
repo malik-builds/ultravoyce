@@ -1,7 +1,7 @@
 import { createClient, isSupabaseConfigured } from "./client";
 import type { WorkflowDocument } from "@/lib/workflow/types";
 
-const LOCAL_KEY = "sayerflow_workflows";
+const LOCAL_KEY = "ultravoyce_workflows";
 
 interface LocalRow {
   id: string;

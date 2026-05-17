@@ -38,6 +38,11 @@ export interface DetailField {
   required: boolean;
 }
 
+export interface PayloadField {
+  key: string;
+  value: string;
+}
+
 export type NodeConfig =
   | { message: string }
   | {
@@ -70,7 +75,7 @@ export type NodeConfig =
   | {
       webhookUrl: string;
       method: "POST";
-      payload: Record<string, string>;
+      payload: PayloadField[];
       onSuccess: "continue";
       onFailure: "continue" | "stop";
     }

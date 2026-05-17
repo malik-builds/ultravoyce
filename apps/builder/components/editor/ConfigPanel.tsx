@@ -6,6 +6,7 @@ import { getPaletteItem } from "@/lib/workflow/node-meta";
 import type {
   DetailField,
   NodeConfig,
+  PayloadField,
   SwitchCase,
   VariableType,
   WorkflowNode,
@@ -589,6 +590,57 @@ function SwitchFieldHeading({
         — {hint}
       </span>
     </span>
+  );
+}
+
+function ActionPayloadFields({
+  payload,
+  onChange,
+}: {
+  payload: PayloadField[];
+  onChange: (payload: PayloadField[]) => void;
+}) {
+  return (
+    <motion.div className="space-y-2">
+      {payload.map((row, idx) => (
+        <motion.div key={idx} className="space-y-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2">
+          <input
+            className="field-input"
+            placeholder="Key"
+            value={row.key}
+            onChange={(e) => {
+              const next = [...payload];
+              next[idx] = { ...row, key: e.target.value };
+              onChange(next);
+            }}
+          />
+          <TokenTextarea
+            value={row.value}
+            onChange={(value) => {
+              const next = [...payload];
+              next[idx] = { ...row, value };
+              onChange(next);
+            }}
+            rows={2}
+            placeholder="{{ variable }}"
+          />
+          <button
+            type="button"
+            className="text-[11px] text-[var(--error)]"
+            onClick={() => onChange(payload.filter((_, i) => i !== idx))}
+          >
+            Remove
+          </button>
+        </motion.div>
+      ))}
+      <button
+        type="button"
+        className="w-full rounded-md border border-dashed border-[var(--border-default)] py-2 text-[12px] text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)]"
+        onClick={() => onChange([...payload, { key: "", value: "" }])}
+      >
+        Add row
+      </button>
+    </motion.div>
   );
 }
 

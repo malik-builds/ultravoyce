@@ -87,7 +87,7 @@ export function EditorToolbar() {
           href="/workflows"
           className="rounded px-1 -mx-1 font-mono text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
         >
-          Sayerflow
+          Ultravoyce
         </Link>
         <span className="h-5 w-px bg-[var(--border-subtle)]" />
         <input

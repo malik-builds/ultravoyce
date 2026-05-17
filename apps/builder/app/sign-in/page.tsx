@@ -43,7 +43,7 @@ export default function SignInPage() {
     <div className="canvas-dot-grid flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-[400px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-10 shadow-[0_8px_40px_#00000055]">
         <p className="mb-8 text-center font-mono text-2xl text-[var(--text-primary)]">
-          Sayerflow
+          Ultravoyce
         </p>
         <h1 className="text-lg font-medium text-[var(--text-primary)]">
           Welcome back
