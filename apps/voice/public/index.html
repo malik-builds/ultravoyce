@@ -203,7 +203,7 @@
     <script type="module">
       import * as THREE from "/vendor/three/three.module.js";
 
-      const TARGET_SAMPLE_RATE = 24000;
+      const TARGET_SAMPLE_RATE = 16000; // Valsea requires 16kHz (ElevenLabs STT used 24kHz)
       const PCM_CHUNK_MIN_SAMPLES = 2048;
 
       const startBtn = document.getElementById("startBtn");
