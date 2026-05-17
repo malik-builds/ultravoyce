@@ -13,7 +13,10 @@ function validate(parsed) {
 
 export async function loadFromFile(filePath = WORKFLOW_PATH) {
   const raw = await readFile(filePath, "utf8");
-  return validate(JSON.parse(raw));
+  const parsed = JSON.parse(raw);
+  // Support both { workflow: {...} } envelope and the workflow object directly
+  const normalized = parsed?.workflow ? parsed : { workflow: parsed };
+  return validate(normalized);
 }
 
 export async function loadFromSupabase(workflowId) {

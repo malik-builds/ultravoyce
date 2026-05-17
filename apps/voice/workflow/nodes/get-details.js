@@ -7,6 +7,12 @@ export async function enter({ session, node, speak, interpolate }) {
   const next = firstMissingRequired(node, session);
   if (!next) return { waitForInput: false, nextNodeId: node.nextNodeId };
 
+  // If the switch routed here via the default case, explain context before asking.
+  if (session._defaultCaseMessage) {
+    await speak(session, session._defaultCaseMessage);
+    session._defaultCaseMessage = null;
+  }
+
   const question = next.question || `Could I get your ${next.description.toLowerCase()}?`;
   await speak(session, interpolate(question, session.variables));
   return { waitForInput: true };
