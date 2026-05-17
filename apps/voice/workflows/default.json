@@ -1,0 +1,148 @@
+{
+  "workflow": {
+    "id": "wf_calendar_booking_01",
+    "name": "Calendar Booking Agent",
+    "version": 1,
+    "description": "Collects caller details and confirms booking data for follow-up actions.",
+    "createdAt": "2026-05-16T08:00:00Z",
+    "updatedAt": "2026-05-16T08:00:00Z",
+    "trigger": {
+      "type": "inbound_websocket",
+      "config": {
+        "connectorId": "conn_abc123"
+      }
+    },
+    "globalVariables": {
+      "customerName": {
+        "type": "string",
+        "value": null
+      },
+      "customerEmail": {
+        "type": "string",
+        "value": null
+      },
+      "customerPhone": {
+        "type": "string",
+        "value": null
+      },
+      "bookingConfirmed": {
+        "type": "boolean",
+        "value": false
+      },
+      "bookingId": {
+        "type": "string",
+        "value": null
+      },
+      "bookingTime": {
+        "type": "string",
+        "value": null
+      }
+    },
+    "entryNodeId": "node_tell_01",
+    "nodes": [
+      {
+        "id": "node_tell_01",
+        "type": "tell",
+        "label": "Greet caller",
+        "position": {
+          "x": 300,
+          "y": 60
+        },
+        "nextNodeId": "node_getdetails_01",
+        "config": {
+          "message": "Hi there! I can help you book an appointment. Let me grab a few details first."
+        }
+      },
+      {
+        "id": "node_getdetails_01",
+        "type": "get_details",
+        "label": "Collect contact info",
+        "position": {
+          "x": 300,
+          "y": 180
+        },
+        "nextNodeId": "node_calendar_01",
+        "config": {
+          "prompt": "Collect the caller's name, email, and phone number.",
+          "fields": [
+            {
+              "variable": "customerName",
+              "description": "The caller's full name",
+              "type": "string",
+              "required": true
+            },
+            {
+              "variable": "customerEmail",
+              "description": "The caller's email address for confirmation",
+              "type": "string",
+              "required": true
+            },
+            {
+              "variable": "customerPhone",
+              "description": "The caller's contact phone number",
+              "type": "string",
+              "required": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "node_calendar_01",
+        "type": "calendar_booker",
+        "label": "Book appointment",
+        "position": {
+          "x": 300,
+          "y": 340
+        },
+        "nextNodeId": "node_action_01",
+        "config": {
+          "calComEventTypeId": 42,
+          "calComApiKey": "{{ secrets.CAL_COM_API_KEY }}",
+          "timezone": "Asia/Colombo",
+          "bookingConfirmationVariable": "bookingConfirmed",
+          "bookingIdVariable": "bookingId",
+          "bookingTimeVariable": "bookingTime",
+          "attendeeNameVariable": "customerName",
+          "attendeeEmailVariable": "customerEmail",
+          "confirmationMessage": "All done, {{ customerName }}. You are booked for {{ bookingTime }}."
+        }
+      },
+      {
+        "id": "node_action_01",
+        "type": "action",
+        "label": "Send booking payload",
+        "position": {
+          "x": 300,
+          "y": 470
+        },
+        "nextNodeId": "node_end_01",
+        "config": {
+          "webhookUrl": "https://httpbin.org/post",
+          "method": "POST",
+          "payload": {
+            "customerName": "{{ customerName }}",
+            "customerEmail": "{{ customerEmail }}",
+            "customerPhone": "{{ customerPhone }}",
+            "bookingId": "{{ bookingId }}",
+            "bookingTime": "{{ bookingTime }}"
+          },
+          "onSuccess": "continue",
+          "onFailure": "continue"
+        }
+      },
+      {
+        "id": "node_end_01",
+        "type": "tell",
+        "label": "Goodbye",
+        "position": {
+          "x": 300,
+          "y": 590
+        },
+        "nextNodeId": null,
+        "config": {
+          "message": "Thanks for calling. Have a great day!"
+        }
+      }
+    ]
+  }
+}
