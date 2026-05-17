@@ -145,7 +145,6 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
   setDescription: (description) => {
     set({ description, isDirty: true });
-    get().pushHistory();
   },
 
   loadDocument: (doc) => {

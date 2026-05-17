@@ -107,6 +107,9 @@ body {
 }
 
 .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--accent);
   color: var(--text-primary);
   border: none;
@@ -128,6 +131,9 @@ body {
 }
 
 .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: 1px solid var(--border-default);
   color: var(--text-secondary);
