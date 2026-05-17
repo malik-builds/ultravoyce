@@ -8,13 +8,13 @@ import { mkdir } from "fs/promises";
 
 import {
   PORT, RECORDINGS_DIR, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-  DEV_WORKFLOW_PATH, ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY,
+  DEV_WORKFLOW_PATH, ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY, VALSEA_API_KEY,
 } from "./config.js";
 import { log } from "./services/log.js";
 import { loadFromFile, loadFromSupabase } from "./workflow/loader.js";
 import { createSession, finalizeSession, sendToClient, startAutoHangupTimer, enforceRecordingCap } from "./workflow/session.js";
 import { processUntilInput, handleUserInput } from "./workflow/runtime.js";
-import { connectSTT, sendAudioChunk } from "./services/stt.js";
+import { connectSTT, sendAudioChunk } from "./services/stt-valsea.js";
 import { healthRouter } from "./routes/health.js";
 import { sessionsRouter } from "./routes/sessions.js";
 
@@ -41,7 +41,7 @@ server.on("upgrade", (request, socket, head) => {
 });
 
 wss.on("connection", async (ws, request) => {
-  if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY) {
+  if (!OPENAI_API_KEY || !ELEVENLABS_API_KEY || !VALSEA_API_KEY) {
     sendToClient(ws, { type: "error", message: "Server is missing required API keys." });
     ws.close(1011, "missing api keys");
     return;
@@ -80,8 +80,8 @@ wss.on("connection", async (ws, request) => {
       let event;
       try { event = JSON.parse(raw.toString()); } catch { return; }
 
-      if (event.message_type === "session_started") {
-        log.info("STT", "session_started — STT ready, starting workflow");
+      if (event.type === "session.ready") {
+        log.info("STT", "Valsea session.ready — STT ready, starting workflow");
         sendToClient(ws, { type: "stt.ready" });
         session.queue = session.queue
           .then(() => processUntilInput(session))
@@ -91,34 +91,34 @@ wss.on("connection", async (ws, request) => {
           });
       }
 
-      if (event.message_type === "partial_transcript") {
+      if (event.type === "transcript.partial") {
         log.debug("STT", "partial_transcript", { text: event.text, isSpeaking: session.isSpeaking });
         sendToClient(ws, { type: "transcript.partial", text: event.text || "" });
       }
 
-      if (event.message_type === "committed_transcript") {
+      if (event.type === "transcript.final") {
         const transcript = String(event.text || "").trim();
         if (!transcript) {
-          log.debug("STT", "committed_transcript ignored — empty");
+          log.debug("STT", "transcript.final ignored — empty");
           return;
         }
         if (session.closed) {
-          log.debug("STT", "committed_transcript ignored — session closed", { transcript });
+          log.debug("STT", "transcript.final ignored — session closed", { transcript });
           return;
         }
         if (session.isSpeaking) {
-          log.warn("STT", "committed_transcript DROPPED — barge-in while speaking", { transcript });
+          log.warn("STT", "transcript.final DROPPED — barge-in while speaking", { transcript });
           return;
         }
         if (session.isProcessing) {
-          log.warn("STT", "committed_transcript DROPPED — still processing previous turn", { transcript });
+          log.warn("STT", "transcript.final DROPPED — still processing previous turn", { transcript });
           return;
         }
         if (!session.awaitingInput) {
-          log.debug("STT", "committed_transcript ignored — not awaiting input", { transcript });
+          log.debug("STT", "transcript.final ignored — not awaiting input", { transcript });
           return;
         }
-        log.info("STT", "committed_transcript — queueing handleUserInput", { transcript });
+        log.info("STT", "transcript.final — queueing handleUserInput", { transcript });
         session.lastAudioAt = Date.now();
         session.isProcessing = true;
         session.queue = session.queue
