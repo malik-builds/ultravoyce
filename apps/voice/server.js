@@ -14,7 +14,8 @@ import { log } from "./services/log.js";
 import { loadFromFile, loadFromSupabase } from "./workflow/loader.js";
 import { createSession, finalizeSession, sendToClient, startAutoHangupTimer, enforceRecordingCap } from "./workflow/session.js";
 import { processUntilInput, handleUserInput } from "./workflow/runtime.js";
-import { connectSTT, sendAudioChunk } from "./services/stt-valsea.js";
+import { connectSTT as connectValseaSTT, sendAudioChunk as sendValseaChunk } from "./services/stt-valsea.js";
+import { connectSTT as connectElevenLabsSTT, sendAudioChunk as sendElevenLabsChunk } from "./services/stt.js";
 import { healthRouter } from "./routes/health.js";
 import { sessionsRouter } from "./routes/sessions.js";
 
@@ -76,12 +77,30 @@ wss.on("connection", async (ws, request) => {
   try {
     session = await createSession(ws, workflowDefinition);
 
-    const sttSocket = await connectSTT((raw) => {
+    // ── Valsea STT: live partial transcript display only ──────────────────────
+    const valseaSocket = await connectValseaSTT((raw) => {
       let event;
       try { event = JSON.parse(raw.toString()); } catch { return; }
 
       if (event.type === "session.ready") {
-        log.info("STT", "Valsea session.ready — STT ready, starting workflow");
+        log.info("STT", "Valsea session.ready — live transcript display active");
+      }
+
+      if (event.type === "transcript.partial") {
+        // Forward live partials to client for typing-effect display
+        sendToClient(ws, { type: "transcript.partial", text: event.text || "" });
+      }
+
+      // transcript.final from Valsea is intentionally ignored — ElevenLabs drives workflow
+    });
+
+    // ── ElevenLabs STT: authoritative finals that drive the workflow ──────────
+    const elevenLabsSocket = await connectElevenLabsSTT((raw) => {
+      let event;
+      try { event = JSON.parse(raw.toString()); } catch { return; }
+
+      if (event.type === "session_started") {
+        log.info("STT", "ElevenLabs session_started — starting workflow");
         sendToClient(ws, { type: "stt.ready" });
         session.queue = session.queue
           .then(() => processUntilInput(session))
@@ -91,34 +110,29 @@ wss.on("connection", async (ws, request) => {
           });
       }
 
-      if (event.type === "transcript.partial") {
-        log.debug("STT", "partial_transcript", { text: event.text, isSpeaking: session.isSpeaking });
-        sendToClient(ws, { type: "transcript.partial", text: event.text || "" });
-      }
-
-      if (event.type === "transcript.final") {
+      if (event.type === "committed_transcript") {
         const transcript = String(event.text || "").trim();
         if (!transcript) {
-          log.debug("STT", "transcript.final ignored — empty");
+          log.debug("STT", "committed_transcript ignored — empty");
           return;
         }
         if (session.closed) {
-          log.debug("STT", "transcript.final ignored — session closed", { transcript });
+          log.debug("STT", "committed_transcript ignored — session closed", { transcript });
           return;
         }
         if (session.isSpeaking) {
-          log.warn("STT", "transcript.final DROPPED — barge-in while speaking", { transcript });
+          log.warn("STT", "committed_transcript DROPPED — barge-in while speaking", { transcript });
           return;
         }
         if (session.isProcessing) {
-          log.warn("STT", "transcript.final DROPPED — still processing previous turn", { transcript });
+          log.warn("STT", "committed_transcript DROPPED — still processing previous turn", { transcript });
           return;
         }
         if (!session.awaitingInput) {
-          log.debug("STT", "transcript.final ignored — not awaiting input", { transcript });
+          log.debug("STT", "committed_transcript ignored — not awaiting input", { transcript });
           return;
         }
-        log.info("STT", "transcript.final — queueing handleUserInput", { transcript });
+        log.info("STT", "committed_transcript — queueing handleUserInput", { transcript });
         session.lastAudioAt = Date.now();
         session.isProcessing = true;
         session.queue = session.queue
@@ -131,7 +145,8 @@ wss.on("connection", async (ws, request) => {
       }
     });
 
-    session.realtimeSttSocket = sttSocket;
+    session.valseaSttSocket = valseaSocket;
+    session.realtimeSttSocket = elevenLabsSocket;
     sessions.set(ws, session);
 
     sendToClient(ws, { type: "session.started", sessionId: session.sessionId });
@@ -172,7 +187,9 @@ wss.on("connection", async (ws, request) => {
         const canContinue = current.audioStream.write(pcmBytes);
         if (!canContinue) await new Promise((r) => current.audioStream.once("drain", r));
 
-        sendAudioChunk(current.realtimeSttSocket, message.audio);
+        // Send audio to both STT providers simultaneously
+        sendValseaChunk(current.valseaSttSocket, message.audio);
+        sendElevenLabsChunk(current.realtimeSttSocket, message.audio);
         return;
       }
 

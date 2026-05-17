@@ -74,6 +74,9 @@ export async function finalizeSession(session, reason) {
   session.closed = true;
   clearTimeout(session.autoHangupTimer);
 
+  if (session.valseaSttSocket?.readyState === WebSocket.OPEN) {
+    session.valseaSttSocket.close();
+  }
   if (session.realtimeSttSocket?.readyState === WebSocket.OPEN) {
     session.realtimeSttSocket.close();
   }
