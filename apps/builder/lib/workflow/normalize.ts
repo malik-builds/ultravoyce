@@ -1,4 +1,4 @@
-import type { PayloadField, WorkflowDocument } from "./types";
+import type { NodeConfig, PayloadField, WorkflowDocument } from "./types";
 
 export function normalizeActionPayload(payload: unknown): PayloadField[] {
   if (Array.isArray(payload)) {
@@ -31,7 +31,7 @@ export function normalizeWorkflowDocument(
     ...doc,
     nodes: doc.nodes.map((node) => {
       if (node.type !== "action") return node;
-      const config = node.config as { payload?: unknown };
+      const config = node.config as Extract<NodeConfig, { webhookUrl: string }>;
       return {
         ...node,
         config: {

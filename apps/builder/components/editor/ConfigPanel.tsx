@@ -421,14 +421,10 @@ function NodeConfigFields({
       );
     }
     case "action": {
-      const c = node.config as {
-        webhookUrl: string;
-        method: "POST";
-        payload: Record<string, string>;
-        onSuccess: "continue";
-        onFailure: "continue" | "stop";
-      };
-      const entries = Object.entries(c.payload);
+      const c = node.config as Extract<
+        NodeConfig,
+        { webhookUrl: string }
+      >;
       return (
         <>
           <Field label="Webhook URL">
@@ -441,49 +437,10 @@ function NodeConfigFields({
             />
           </Field>
           <Field label="Payload">
-            <div className="space-y-2">
-              {entries.map(([key, val], idx) => (
-                <div key={idx} className="flex gap-2">
-                  <input
-                    className="field-input flex-1"
-                    placeholder="Key"
-                    value={key}
-                    onChange={(e) => {
-                      const payload = { ...c.payload };
-                      const oldKey = Object.keys(payload)[idx];
-                      if (oldKey) delete payload[oldKey];
-                      payload[e.target.value] = val;
-                      patchConfig({ ...c, payload });
-                    }}
-                  />
-                  <input
-                    className="field-input flex-1"
-                    placeholder="Value"
-                    value={val}
-                    onChange={(e) => {
-                      const k = Object.keys(c.payload)[idx];
-                      if (!k) return;
-                      patchConfig({
-                        ...c,
-                        payload: { ...c.payload, [k]: e.target.value },
-                      });
-                    }}
-                  />
-                </div>
-              ))}
-              <button
-                type="button"
-                className="w-full rounded-md border border-dashed border-[var(--border-default)] py-2 text-[12px] text-[var(--text-tertiary)]"
-                onClick={() =>
-                  patchConfig({
-                    ...c,
-                    payload: { ...c.payload, "": "" },
-                  })
-                }
-              >
-                Add row
-              </button>
-            </div>
+            <ActionPayloadFields
+              payload={c.payload}
+              onChange={(payload) => patchConfig({ ...c, payload })}
+            />
           </Field>
           <Field label="On failure">
             <select
@@ -601,9 +558,9 @@ function ActionPayloadFields({
   onChange: (payload: PayloadField[]) => void;
 }) {
   return (
-    <motion.div className="space-y-2">
+    <div className="space-y-2">
       {payload.map((row, idx) => (
-        <motion.div key={idx} className="space-y-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2">
+        <div key={idx} className="space-y-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-elevated)] p-2">
           <input
             className="field-input"
             placeholder="Key"
@@ -631,7 +588,7 @@ function ActionPayloadFields({
           >
             Remove
           </button>
-        </motion.div>
+        </div>
       ))}
       <button
         type="button"
@@ -640,7 +597,7 @@ function ActionPayloadFields({
       >
         Add row
       </button>
-    </motion.div>
+    </div>
   );
 }
 
