@@ -49,6 +49,12 @@ export async function handleInput({ session, node, speak }, utterance) {
     }
 
     log.info("ANSWER_QUERIES", "lead contact captured", { contact: lc.contact });
+    session.capturedLeads.push({
+      source: "inquiry_fallback",
+      name: lc.name,
+      contact: lc.contact,
+      capturedAt: new Date().toISOString(),
+    });
     session._leadCapture = null; // reset — allow further Q&A
 
     await speak(session, "Perfect, we'll get back to you shortly. Is there anything else I can help you with?");

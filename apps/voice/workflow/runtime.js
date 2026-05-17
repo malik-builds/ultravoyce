@@ -109,6 +109,15 @@ export async function processUntilInput(session) {
 
       if (result.waitForInput) {
         session.awaitingInput = true;
+
+        if (session._pendingInput) {
+          const pending = session._pendingInput;
+          session._pendingInput = null;
+          log.info("RUNTIME", "consuming pending input from switch", { nodeId: node.id, pending });
+          await handleUserInput(session, pending);
+          return;
+        }
+
         log.info("RUNTIME", `node waiting for input`, { nodeId: node.id, type: node.type });
         sendToClient(session.clientWs, { type: "workflow.node.waiting", nodeId: node.id });
         return;

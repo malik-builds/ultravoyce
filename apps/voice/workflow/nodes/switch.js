@@ -16,6 +16,7 @@ export async function enter({ session, node, speak, send, interpolate }) {
 
   if (storedValues.length > 0) {
     const utterance = storedValues.join(" ");
+    session._pendingInput = utterance;
     log.info("SWITCH", "classifying from stored variable", { utterance });
     return classifyAndRoute({ session, node, speak, send, interpolate }, utterance);
   }

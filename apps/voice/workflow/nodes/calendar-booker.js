@@ -18,6 +18,15 @@ import { log } from "../../services/log.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function upsertBookingLead(session, patch) {
+  const existing = session.capturedLeads.find((l) => l.source === "booking");
+  if (existing) {
+    Object.assign(existing, patch);
+  } else {
+    session.capturedLeads.push({ source: "booking", capturedAt: new Date().toISOString(), ...patch });
+  }
+}
+
 function resolveEmail(cfg, session) {
   if (cfg.attendeeEmailVariable && session.variables[cfg.attendeeEmailVariable]?.value) {
     return session.variables[cfg.attendeeEmailVariable].value;
@@ -95,6 +104,7 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
       return { waitForInput: true };
     }
     log.info("CAL", "fallback phone captured", { phone });
+    upsertBookingLead(session, { phone });
     cal.fallbackPhase = null;
     await speak(session, "Perfect, we'll be in touch shortly to arrange your appointment. Is there anything else I can help you with?");
     return { waitForInput: false, nextNodeId: node.nextNodeId };
@@ -119,6 +129,7 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
     cal.email = match[0];
     cal.emailFailCount = 0;
     log.info("CAL", "email collected inline", { email: cal.email });
+    upsertBookingLead(session, { email: cal.email });
     return advance(session, node, speak, send, interpolate);
   }
 
@@ -131,6 +142,7 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
     }
     cal.name = name.trim();
     log.info("CAL", "name collected inline", { name: cal.name });
+    upsertBookingLead(session, { name: cal.name });
     return advance(session, node, speak, send, interpolate);
   }
 

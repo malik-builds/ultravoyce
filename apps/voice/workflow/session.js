@@ -65,6 +65,8 @@ export async function createSession(ws, workflowDefinition) {
     createdAt: new Date().toISOString(),
     clientWs: ws,
     realtimeSttSocket: null,
+    capturedLeads: [],
+    _pendingInput: null,
     queue: Promise.resolve(),
   };
 }
