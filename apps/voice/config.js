@@ -8,14 +8,16 @@ export const PORT = Number(process.env.PORT || 8001);
 export const RECORDINGS_DIR = path.join(__dirname, "recordings");
 export const WORKFLOW_PATH = process.env.WORKFLOW_PATH || path.join(__dirname, "workflows", "default.json");
 
-// ElevenLabs
+// ElevenLabs (TTS only on valsea branch — STT handled by Valsea)
 export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 export const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "Xb7hH8MSUJpSbSDYk0k2";
 export const ELEVENLABS_TTS_MODEL = process.env.ELEVENLABS_TTS_MODEL || "eleven_flash_v2_5";
-export const ELEVENLABS_STT_URL =
-  "wss://api.elevenlabs.io/v1/speech-to-text/realtime?model_id=scribe_v2_realtime&audio_format=pcm_24000&commit_strategy=vad&vad_silence_duration_ms=1000";
 export const ELEVENLABS_TTS_URL = () =>
   `wss://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream-input?model_id=${ELEVENLABS_TTS_MODEL}`;
+
+// Valsea STT
+export const VALSEA_API_KEY = process.env.VALSEA_API_KEY;
+export const VALSEA_STT_URL = "wss://api.valsea.ai/v1/realtime";
 
 // OpenAI
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
