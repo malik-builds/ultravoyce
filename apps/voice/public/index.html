@@ -4,207 +4,654 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ultravoyce Workflow Call</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Geist:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        --bg: #06080f;
-        --card: rgba(16, 21, 34, 0.72);
-        --border: rgba(255, 255, 255, 0.12);
-        --text: #f2f5ff;
-        --muted: #b9c1dd;
-        --accent: #7c86ff;
-        --good: #44d086;
-        --danger: #ff586f;
+        --bg-base: #0e0e10;
+        --bg-surface: #161618;
+        --bg-elevated: #1e1e21;
+        --bg-hover: #26262b;
+        --bg-active: #2e2e34;
+        --border-subtle: #ffffff0f;
+        --border-default: #ffffff1a;
+        --border-strong: #ffffff33;
+        --text-primary: #f0f0f2;
+        --text-secondary: #8b8b99;
+        --text-tertiary: #55555f;
+        --accent: #ff3d2e;
+        --accent-dim: #ff3d2e22;
+        --accent-bright: #ff6054;
+        --success: #34d399;
+        --warning: #fbbf24;
+        --error: #f87171;
+        --info: #60a5fa;
+        --node-tell: #2dd4bf;
+        --node-ask: #2dd4bf;
+        --node-details: #38bdf8;
+        --node-calendar: #38bdf8;
+        --node-queries: #a78bfa;
+        --node-switch: #fbbf24;
+        --node-action: #94a3b8;
+        --node-transfer: #fb7185;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --font-sans: "Geist", system-ui, sans-serif;
+        --font-mono: "Geist Mono", ui-monospace, monospace;
+        --radius-card: 10px;
+        --radius-input: 6px;
+        --radius-btn: 8px;
+        --transition: 150ms ease-out;
       }
-      * {
+
+      *,
+      *::before,
+      *::after {
         box-sizing: border-box;
       }
+
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: Inter, "SF Pro Display", "Segoe UI", sans-serif;
-        color: var(--text);
-        background: var(--bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--text-primary);
+        background-color: var(--bg-base);
+        background-image: radial-gradient(circle, #ffffff08 1px, transparent 1px);
+        background-size: 24px 24px;
         overflow-x: hidden;
       }
-      #bg-canvas {
-        position: fixed;
-        inset: 0;
-        z-index: -2;
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
       }
-      #bg-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: -1;
-        background: radial-gradient(circle at 20% 15%, rgba(124, 134, 255, 0.24) 0%, rgba(6, 8, 15, 0.76) 45%),
-          radial-gradient(circle at 80% 30%, rgba(68, 208, 134, 0.12) 0%, rgba(6, 8, 15, 0.86) 40%),
-          linear-gradient(180deg, rgba(6, 8, 15, 0.35) 0%, rgba(6, 8, 15, 0.9) 100%);
+
+      .app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
       }
-      .container {
+
+      /* Toolbar */
+      .toolbar {
+        height: 48px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 var(--space-4);
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .toolbar-left {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-width: 0;
+      }
+
+      .wordmark {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .toolbar-sep {
+        width: 1px;
+        height: 20px;
+        background: var(--border-subtle);
+        flex-shrink: 0;
+      }
+
+      .toolbar-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .toolbar-right {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        flex-shrink: 0;
+      }
+
+      #statusText {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        padding: var(--space-1) var(--space-2);
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-hover);
+        color: var(--text-tertiary);
+        transition: color var(--transition), border-color var(--transition), background var(--transition);
+      }
+
+      .pill[data-state="connecting"],
+      .pill[data-state="starting"] {
+        color: var(--info);
+        border-color: #60a5fa33;
+        background: #60a5fa15;
+      }
+
+      .pill[data-state="listening"] {
+        color: var(--success);
+        border-color: #34d39933;
+        background: #34d39915;
+      }
+
+      .pill[data-state="speaking"] {
+        color: var(--accent-bright);
+        border-color: #ff3d2e44;
+        background: var(--accent-dim);
+      }
+
+      .pill[data-state="error"] {
+        color: var(--error);
+        border-color: #f8717133;
+        background: #f8717115;
+      }
+
+      .pill[data-state="active"],
+      .pill[data-state="ended"],
+      .pill[data-state="idle"] {
+        color: var(--text-tertiary);
+      }
+
+      /* Main layout */
+      .main {
+        flex: 1;
         max-width: 1120px;
+        width: 100%;
         margin: 0 auto;
-        padding: 2rem 1.1rem 2.5rem;
+        padding: var(--space-6) var(--space-4) var(--space-8);
       }
-      .header {
-        margin-bottom: 1rem;
+
+      .page-heading {
+        margin: 0 0 var(--space-5);
       }
-      h1 {
+
+      .page-heading h1 {
         margin: 0;
-        font-size: 1.8rem;
-        letter-spacing: 0.01em;
+        font-family: var(--font-mono);
+        font-size: 18px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        line-height: 1;
+        color: var(--text-primary);
       }
-      .subtitle {
-        margin: 0.4rem 0 0;
-        color: var(--muted);
+
+      .page-heading .subtitle {
+        margin: var(--space-2) 0 0;
+        font-size: 13px;
+        color: var(--text-secondary);
       }
+
       .grid {
         display: grid;
-        gap: 1rem;
-        grid-template-columns: 1.2fr 0.8fr;
+        gap: var(--space-4);
+        grid-template-columns: 1.15fr 0.85fr;
+        grid-template-rows: auto auto;
       }
+
       .card {
-        border: 1px solid var(--border);
-        border-radius: 18px;
-        background: var(--card);
-        backdrop-filter: blur(14px);
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
-        padding: 1rem;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-card);
+        box-shadow: 0 2px 8px #00000044;
+        padding: var(--space-4);
+        min-width: 0;
       }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
+        padding-bottom: var(--space-3);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .card-header-icon {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        color: var(--text-secondary);
+      }
+
+      .card-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin: 0;
+      }
+
+      .card-conversation {
+        grid-column: 1 / -1;
+      }
+
+      /* Call controls */
       .controls {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 0.7rem;
+        gap: var(--space-2);
+        margin-bottom: var(--space-4);
       }
-      button {
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
         border: 0;
-        border-radius: 12px;
-        padding: 0.74rem 1.1rem;
-        font-weight: 650;
+        border-radius: var(--radius-btn);
+        padding: 0 var(--space-4);
+        height: 36px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
         cursor: pointer;
-        transition: transform 0.08s ease, opacity 0.2s ease;
+        transition: background var(--transition), opacity var(--transition), transform var(--transition),
+          box-shadow var(--transition);
       }
-      button:active {
-        transform: translateY(1px);
+
+      .btn svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
       }
-      button[disabled] {
+
+      .btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-dim);
+      }
+
+      .btn:active:not([disabled]) {
+        transform: scale(0.98);
+      }
+
+      .btn[disabled] {
         cursor: not-allowed;
-        opacity: 0.55;
+        opacity: 0.4;
       }
-      #startBtn {
-        background: linear-gradient(120deg, #6d7dff 0%, #4d64ff 100%);
-        color: #fff;
+
+      .btn-primary {
+        background: var(--accent);
+        color: var(--text-primary);
       }
-      #endBtn {
-        background: linear-gradient(120deg, #ff6f86 0%, #ff4f68 100%);
-        color: #fff;
+
+      .btn-primary:hover:not([disabled]) {
+        background: var(--accent-bright);
       }
-      .pill {
-        border-radius: 999px;
-        border: 1px solid var(--border);
-        background: rgba(255, 255, 255, 0.06);
-        padding: 0.35rem 0.75rem;
-        font-size: 0.82rem;
-        font-weight: 700;
+
+      .btn-danger {
+        background: transparent;
+        color: var(--error);
+        border: 1px solid #f8717144;
       }
+
+      .btn-danger:hover:not([disabled]) {
+        background: #f8717115;
+        border-color: var(--error);
+      }
+
+      .live-panel {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-input);
+        padding: var(--space-3) var(--space-4);
+        margin-bottom: var(--space-3);
+      }
+
+      .live-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: var(--space-1);
+      }
+
+      .live-line {
+        min-height: 1.25rem;
+        font-size: 13px;
+        color: var(--text-primary);
+        line-height: 1.4;
+      }
+
+      .meter-wrap {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+      }
+
+      .meter-label {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        flex-shrink: 0;
+        width: 2.5rem;
+      }
+
       .meter {
-        margin-top: 0.8rem;
-        height: 9px;
+        flex: 1;
+        height: 6px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.09);
+        background: var(--bg-active);
         overflow: hidden;
       }
+
       .meter-fill {
         height: 100%;
         width: 0%;
-        background: linear-gradient(90deg, #8b93ff 0%, #44d086 100%);
+        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-bright) 55%, var(--success) 100%);
+        border-radius: 999px;
         transition: width 0.08s linear;
       }
-      .live-line {
-        min-height: 1.6rem;
-        margin-top: 0.5rem;
+
+      /* Workflow state */
+      .card-workflow {
+        position: relative;
+        overflow: hidden;
       }
-      .log {
-        max-height: 360px;
-        overflow: auto;
-        white-space: pre-wrap;
-        line-height: 1.4;
+
+      .node-stripe {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--node-action);
+        border-radius: var(--radius-card) 0 0 var(--radius-card);
+        transition: background var(--transition);
       }
-      .turn-user {
-        color: #abd3ff;
+
+      .card-workflow-inner {
+        padding-left: var(--space-2);
       }
-      .turn-assistant {
-        color: #93f0c1;
-      }
+
       .kv {
         display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 0.4rem 0.7rem;
-        font-size: 0.92rem;
+        grid-template-columns: 5.5rem 1fr;
+        gap: var(--space-2) var(--space-3);
+        font-size: 12px;
       }
+
       .kv .k {
-        color: var(--muted);
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 500;
       }
+
+      .kv .v {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--text-primary);
+        word-break: break-word;
+      }
+
+      .kv .v-type {
+        display: inline-block;
+        font-size: 11px;
+        padding: 2px var(--space-2);
+        border-radius: 999px;
+        background: var(--bg-hover);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-tertiary);
+      }
+
+      .section-block {
+        margin-top: var(--space-4);
+        padding-top: var(--space-4);
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .section-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: var(--space-2);
+      }
+
       .required-list {
-        margin: 0.3rem 0 0;
-        padding-left: 1.2rem;
-        color: #ffd8a8;
+        margin: 0;
+        padding-left: var(--space-4);
+        font-size: 12px;
+        color: var(--warning);
+        line-height: 1.5;
       }
-      @media (max-width: 980px) {
+
+      .required-list li:only-child {
+        color: var(--text-tertiary);
+        list-style: none;
+        margin-left: calc(-1 * var(--space-4));
+      }
+
+      #varsView {
+        margin: 0;
+        padding: var(--space-3);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.4;
+        letter-spacing: 0.04em;
+        color: var(--text-secondary);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-input);
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 140px;
+        overflow: auto;
+      }
+
+      /* Conversation log */
+      .log {
+        max-height: 320px;
+        overflow: auto;
+        padding: var(--space-3);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-input);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .log:empty::before {
+        content: "Transcript will appear here once the call starts.";
+        color: var(--text-tertiary);
+        font-size: 12px;
+      }
+
+      .turn-user,
+      .turn-assistant {
+        padding: var(--space-2) 0;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .turn-user:last-child,
+      .turn-assistant:last-child {
+        border-bottom: none;
+      }
+
+      .turn-user {
+        color: var(--info);
+      }
+
+      .turn-assistant {
+        color: var(--success);
+      }
+
+      .turn-user::before,
+      .turn-assistant::before {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        margin-bottom: 2px;
+        opacity: 0.85;
+      }
+
+      .turn-user::before {
+        content: "You";
+        color: var(--text-tertiary);
+      }
+
+      .turn-assistant::before {
+        content: "Assistant";
+        color: var(--text-tertiary);
+      }
+
+      @media (max-width: 900px) {
         .grid {
           grid-template-columns: 1fr;
+        }
+
+        .toolbar-subtitle {
+          display: none;
         }
       }
     </style>
   </head>
   <body>
-    <canvas id="bg-canvas"></canvas>
-    <div id="bg-overlay"></div>
-    <div class="container">
-      <div class="header">
-        <h1>Ultravoyce Workflow Runtime</h1>
-        <p class="subtitle">Realtime speech call with node-by-node workflow execution.</p>
-      </div>
-      <div class="grid">
-        <section class="card">
-          <div class="controls">
-            <button id="startBtn">Start Call</button>
-            <button id="endBtn" disabled>Decline Call</button>
-            <span class="pill" id="callStatePill">idle</span>
-            <span id="statusText">Ready</span>
-          </div>
-          <div class="live-line" id="partial">Waiting to start...</div>
-          <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
-        </section>
+    <div class="app">
+      <header class="toolbar">
+        <div class="toolbar-left">
+          <span class="wordmark">Ultravoyce</span>
+          <span class="toolbar-sep" aria-hidden="true"></span>
+          <span class="toolbar-subtitle">Workflow runtime call</span>
+        </div>
+        <div class="toolbar-right">
+          <span id="statusText">Ready</span>
+          <span class="pill" id="callStatePill" data-state="idle">idle</span>
+        </div>
+      </header>
 
-        <section class="card">
-          <strong>Workflow State</strong>
-          <div class="kv" style="margin-top: 0.8rem;">
-            <span class="k">Node</span><span id="wfNode">-</span>
-            <span class="k">Type</span><span id="wfType">-</span>
-            <span class="k">Label</span><span id="wfLabel">-</span>
-          </div>
-          <div style="margin-top: 0.8rem;">
-            <div class="k">Pending required fields</div>
-            <ul id="requiredList" class="required-list"></ul>
-          </div>
-          <div style="margin-top: 0.8rem;">
-            <div class="k">Variables</div>
-            <pre id="varsView" style="white-space: pre-wrap; margin: 0.35rem 0 0; color: #d6dcf6;"></pre>
-          </div>
-        </section>
+      <main class="main">
+        <div class="page-heading">
+          <h1>Voice call</h1>
+          <p class="subtitle">Realtime speech with node-by-node workflow execution.</p>
+        </div>
 
-        <section class="card">
-          <strong>Conversation</strong>
-          <div class="log" id="log"></div>
-        </section>
-      </div>
+        <div class="grid">
+          <section class="card card-call">
+            <div class="card-header">
+              <svg class="card-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" x2="12" y1="19" y2="22" />
+              </svg>
+              <h2 class="card-title">Call controls</h2>
+            </div>
+            <div class="controls">
+              <button type="button" class="btn btn-primary" id="startBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z" />
+                </svg>
+                Start call
+              </button>
+              <button type="button" class="btn btn-danger" id="endBtn" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 0 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72" />
+                  <line x1="2" x2="22" y1="2" y2="22" />
+                </svg>
+                End call
+              </button>
+            </div>
+            <div class="live-panel">
+              <div class="live-label">Live transcript</div>
+              <div class="live-line" id="partial">Waiting to start…</div>
+            </div>
+            <div class="meter-wrap">
+              <span class="meter-label">Input</span>
+              <div class="meter" role="meter" aria-label="Microphone level">
+                <div class="meter-fill" id="meterFill"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card card-workflow">
+            <div class="node-stripe" id="nodeStripe" aria-hidden="true"></div>
+            <div class="card-workflow-inner">
+              <div class="card-header">
+                <svg class="card-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <rect width="8" height="8" x="3" y="3" rx="2" />
+                  <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+                  <rect width="8" height="8" x="13" y="13" rx="2" />
+                </svg>
+                <h2 class="card-title">Workflow state</h2>
+              </div>
+              <div class="kv">
+                <span class="k">Node</span><span class="v" id="wfNode">-</span>
+                <span class="k">Type</span><span class="v"><span class="v-type" id="wfType">-</span></span>
+                <span class="k">Label</span><span class="v" id="wfLabel">-</span>
+              </div>
+              <div class="section-block">
+                <div class="section-label">Pending required fields</div>
+                <ul id="requiredList" class="required-list"></ul>
+              </div>
+              <div class="section-block">
+                <div class="section-label">Variables</div>
+                <pre id="varsView">{}</pre>
+              </div>
+            </div>
+          </section>
+
+          <section class="card card-conversation">
+            <div class="card-header">
+              <svg class="card-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <h2 class="card-title">Conversation</h2>
+            </div>
+            <div class="log" id="log" role="log" aria-live="polite"></div>
+          </section>
+        </div>
+      </main>
     </div>
 
     <script type="module">
-      import * as THREE from "/vendor/three/three.module.js";
-
       const TARGET_SAMPLE_RATE = 24000;
       const PCM_CHUNK_MIN_SAMPLES = 2048;
+
+      const NODE_STRIPE_COLORS = {
+        tell: "#2dd4bf",
+        ask_question: "#2dd4bf",
+        get_details: "#38bdf8",
+        calendar_booker: "#38bdf8",
+        answer_queries: "#a78bfa",
+        switch: "#fbbf24",
+        action: "#94a3b8",
+        transfer_call: "#fb7185",
+      };
 
       const startBtn = document.getElementById("startBtn");
       const endBtn = document.getElementById("endBtn");
@@ -218,6 +665,7 @@
       const wfLabel = document.getElementById("wfLabel");
       const requiredList = document.getElementById("requiredList");
       const varsView = document.getElementById("varsView");
+      const nodeStripe = document.getElementById("nodeStripe");
 
       let ws = null;
       let mediaStream = null;
@@ -236,6 +684,7 @@
       function setStatus(text, state = "active") {
         statusTextEl.textContent = text;
         callStatePill.textContent = state;
+        callStatePill.dataset.state = state;
       }
 
       function appendTranscript(role, text) {
@@ -243,15 +692,22 @@
         if (!value) return;
         const line = document.createElement("div");
         line.className = role === "assistant" ? "turn-assistant" : "turn-user";
-        line.textContent = `${role === "assistant" ? "AI" : "You"}: ${value}`;
+        line.textContent = value;
         logEl.appendChild(line);
         logEl.scrollTop = logEl.scrollHeight;
       }
 
+      function updateNodeStripe(nodeType) {
+        const color = NODE_STRIPE_COLORS[nodeType] || "#94a3b8";
+        nodeStripe.style.background = color;
+      }
+
       function updateWorkflowState(message) {
         wfNode.textContent = message.nodeId || "-";
-        wfType.textContent = message.nodeType || "-";
+        const type = message.nodeType || "-";
+        wfType.textContent = type;
         wfLabel.textContent = message.nodeLabel || "-";
+        updateNodeStripe(message.nodeType);
         varsView.textContent = JSON.stringify(message.variables || {}, null, 2);
         requiredList.innerHTML = "";
         const pending = Array.isArray(message.pendingRequired) ? message.pendingRequired : [];
@@ -347,7 +803,11 @@
         if (audioQueue.length) {
           sourceBuffer.appendBuffer(audioQueue.shift());
         } else if (streamEnding && mediaSource && mediaSource.readyState === "open") {
-          try { mediaSource.endOfStream(); } catch { /* ignore */ }
+          try {
+            mediaSource.endOfStream();
+          } catch {
+            /* ignore */
+          }
           streamEnding = false;
         }
       }
@@ -359,8 +819,6 @@
       }
 
       function finishAudioStream() {
-        // Don't call endOfStream() immediately — queue may still have chunks to append.
-        // Set the flag and let flushAudioQueue() call it once the queue drains.
         streamEnding = true;
         flushAudioQueue();
       }
@@ -503,49 +961,6 @@
         partialEl.textContent = "Call ended. Start again when ready.";
       }
 
-      function initBackground() {
-        const canvas = document.getElementById("bg-canvas");
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.z = 9;
-
-        const count = 900;
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(count * 3);
-        for (let i = 0; i < count; i += 1) {
-          positions[i * 3] = (Math.random() - 0.5) * 18;
-          positions[i * 3 + 1] = (Math.random() - 0.5) * 14;
-          positions[i * 3 + 2] = (Math.random() - 0.5) * 12;
-        }
-        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-        const material = new THREE.PointsMaterial({
-          color: 0x92a5ff,
-          size: 0.045,
-          transparent: true,
-          opacity: 0.8,
-        });
-        const particles = new THREE.Points(geometry, material);
-        scene.add(particles);
-
-        function resize() {
-          renderer.setSize(window.innerWidth, window.innerHeight, false);
-          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
-          camera.aspect = window.innerWidth / window.innerHeight;
-          camera.updateProjectionMatrix();
-        }
-        resize();
-        window.addEventListener("resize", resize);
-
-        function animate(t) {
-          particles.rotation.y = t * 0.00008;
-          particles.rotation.x = Math.sin(t * 0.00014) * 0.06;
-          renderer.render(scene, camera);
-          requestAnimationFrame(animate);
-        }
-        requestAnimationFrame(animate);
-      }
-
       startBtn.addEventListener("click", () => {
         startCall().catch((error) => {
           console.error(error);
@@ -559,7 +974,6 @@
         });
       });
       endBtn.addEventListener("click", () => endCall(true));
-      initBackground();
     </script>
   </body>
 </html>
