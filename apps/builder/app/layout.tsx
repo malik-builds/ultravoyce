@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sayerflow — Workflow builder",
+  title: "Ultravoyce — Workflow builder",
   description: "Visual editor for voice agent workflows",
 };
 

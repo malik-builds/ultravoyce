@@ -47,7 +47,7 @@ export default function SignUpPage() {
     <div className="canvas-dot-grid flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-[400px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-10 shadow-[0_8px_40px_#00000055]">
         <p className="mb-8 text-center font-mono text-2xl text-[var(--text-primary)]">
-          Sayerflow
+          Ultravoyce
         </p>
         {done ? (
           <p className="text-center text-[13px] text-[var(--text-secondary)]">

@@ -33,7 +33,7 @@ export default function WorkflowsPage() {
   return (
     <div className="min-h-screen bg-[var(--bg-base)]">
       <header className="flex h-12 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6">
-        <span className="font-mono text-sm font-medium">Sayerflow</span>
+        <span className="font-mono text-sm font-medium">Ultravoyce</span>
         <div className="flex items-center gap-2">
           <Link href="/deployments" className="btn-ghost">
             Deployments
