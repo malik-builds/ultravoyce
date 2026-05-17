@@ -1,4 +1,6 @@
 import { slotsToNaturalLanguage, parseSlotSelection, extractSingleValue } from "../../services/llm.js";
+
+const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
 import { log } from "../../services/log.js";
 
 // Interactive cal.com booking node.
@@ -30,8 +32,6 @@ function resolveName(cfg, session) {
   return session._calBooking?.name || null;
 }
 
-const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
-
 // ─── Advance the booking flow (called from both enter and handleInput) ────────
 
 async function advance(session, node, speak, send, interpolate) {
@@ -56,11 +56,14 @@ async function advance(session, node, speak, send, interpolate) {
   cal.phase = "need_slot";
   const slots = await fetchSlots(node, session, interpolate);
   if (!slots) {
-    await speak(session, "I'm having trouble checking availability right now. I'll have the team follow up with you.");
-    return { waitForInput: false, nextNodeId: node.nextNodeId };
+    // API down — fall back to lead capture with phone number instead of booking.
+    log.warn("CAL", "slots unavailable — switching to fallback lead capture");
+    cal.fallbackPhase = "need_phone";
+    await speak(session, "I'm having trouble checking our calendar right now. No worries — could I take your phone number and we'll call you back to arrange a time?");
+    return { waitForInput: true };
   }
   if (slots.length === 0) {
-    await speak(session, "There are no available slots in the next 7 days. I'll let the team know.");
+    await speak(session, "There are no available slots in the next 7 days. I'll let the team know and they'll reach out to you.");
     return { waitForInput: false, nextNodeId: node.nextNodeId };
   }
 
@@ -74,7 +77,7 @@ async function advance(session, node, speak, send, interpolate) {
 // ─── Node handlers ────────────────────────────────────────────────────────────
 
 export async function enter({ session, node, speak, send, interpolate }) {
-  session._calBooking = { email: null, name: null, phase: null };
+  session._calBooking = { email: null, name: null, phase: null, emailFailCount: 0, fallbackPhase: null };
   return advance(session, node, speak, send, interpolate);
 }
 
@@ -83,15 +86,38 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
   const timezone = cfg.timezone || "UTC";
   const cal = session._calBooking || {};
 
+  // ── Fallback lead capture (API was down) ──────────────────────────────────
+  if (cal.fallbackPhase === "need_phone") {
+    const phoneMatch = utterance.match(/[\+\d][\d\s\-().]{6,}/);
+    const phone = phoneMatch?.[0] || await extractSingleValue(utterance, "phone number");
+    if (!phone) {
+      await speak(session, "Sorry, I didn't catch that. Could you give me your phone number?");
+      return { waitForInput: true };
+    }
+    log.info("CAL", "fallback phone captured", { phone });
+    cal.fallbackPhase = null;
+    await speak(session, "Perfect, we'll be in touch shortly to arrange your appointment. Is there anything else I can help you with?");
+    return { waitForInput: false, nextNodeId: node.nextNodeId };
+  }
+
   // ── Collecting email ──────────────────────────────────────────────────────
   if (cal.phase === "need_email") {
     const match = utterance.match(EMAIL_RE);
     if (!match) {
-      log.info("CAL", "email not found in utterance", { utterance });
-      await speak(session, "Sorry, I didn't catch a valid email. Could you spell it out?");
+      cal.emailFailCount = (cal.emailFailCount || 0) + 1;
+      log.info("CAL", "email not found in utterance", { utterance, failCount: cal.emailFailCount });
+      if (cal.emailFailCount >= 2) {
+        // Two failed attempts — switch to phone fallback instead.
+        cal.phase = null;
+        cal.fallbackPhase = "need_phone";
+        await speak(session, "No problem. Could I take your phone number instead and we'll be in touch to arrange a time?");
+        return { waitForInput: true };
+      }
+      await speak(session, "Sorry, I didn't catch a valid email. Could you spell it out for me?");
       return { waitForInput: true };
     }
     cal.email = match[0];
+    cal.emailFailCount = 0;
     log.info("CAL", "email collected inline", { email: cal.email });
     return advance(session, node, speak, send, interpolate);
   }

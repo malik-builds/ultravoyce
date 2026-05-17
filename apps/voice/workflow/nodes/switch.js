@@ -56,6 +56,12 @@ async function classifyAndRoute({ session, node, speak, send, interpolate }, utt
     return { waitForInput: true };
   }
 
+  // When routing via the default case (no intent matched), tag the session so the
+  // next node knows to explain why it's asking for details before diving in.
+  if (!match && cfg.defaultCaseNextNodeId) {
+    session._defaultCaseMessage = "No worries! Let me take your details and we'll have someone reach out to you shortly.";
+  }
+
   send(session.clientWs, {
     type: "workflow.switch.decision",
     nodeId: node.id,
