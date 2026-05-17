@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.turbo
+**/.turbo
+**/.env*
+**/.env.*
+**/recordings
+**/*.md
+apps/builder
+apps/web
+apps/docs
+apps/phone
+packages
