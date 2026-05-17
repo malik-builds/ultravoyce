@@ -114,7 +114,11 @@ wss.on("connection", async (ws, request) => {
           log.warn("STT", "committed_transcript DROPPED — still processing previous turn", { transcript });
           return;
         }
-        log.info("STT", "committed_transcript — queueing handleUserInput", { transcript, awaitingInput: session.awaitingInput });
+        if (!session.awaitingInput) {
+          log.debug("STT", "committed_transcript ignored — not awaiting input", { transcript });
+          return;
+        }
+        log.info("STT", "committed_transcript — queueing handleUserInput", { transcript });
         session.lastAudioAt = Date.now();
         session.isProcessing = true;
         session.queue = session.queue

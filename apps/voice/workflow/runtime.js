@@ -31,14 +31,24 @@ async function speakText(session, text) {
   sendToClient(session.clientWs, { type: "assistant.final", text: clean });
   sendToClient(session.clientWs, { type: "assistant.speaking" });
   let chunkCount = 0;
+  let totalAudioBytes = 0;
   const ttsStart = Date.now();
   try {
     await streamTTS(clean, (audioBase64) => {
       chunkCount++;
-      log.debug("TTS", `audio chunk #${chunkCount}`, { bytes: Math.round(audioBase64.length * 0.75) });
+      const bytes = Math.round(audioBase64.length * 0.75);
+      totalAudioBytes += bytes;
+      log.debug("TTS", `audio chunk #${chunkCount}`, { bytes });
       sendToClient(session.clientWs, { type: "assistant.audio.chunk", audio: audioBase64, mimeType: "audio/mpeg" });
     });
-    log.info("TTS", "speak done", { chunks: chunkCount, durationMs: Date.now() - ttsStart });
+    // Wait until the audio has had time to play on the client before proceeding.
+    // ElevenLabs generation finishes ~835ms, but the audio plays for much longer.
+    // If we don't wait, the next node's speak() tears down the current audio player.
+    const estimatedPlayMs = Math.round(totalAudioBytes / 16); // 128kbps ≈ 16 bytes/ms
+    const serverElapsedMs = Date.now() - ttsStart;
+    const waitMs = Math.max(300, estimatedPlayMs - serverElapsedMs + 400);
+    log.info("TTS", "speak done — waiting for playback", { chunks: chunkCount, durationMs: serverElapsedMs, estimatedPlayMs, waitMs });
+    await new Promise((r) => setTimeout(r, waitMs));
   } catch (err) {
     log.error("TTS", "stream failed", { err: err.message });
     sendToClient(session.clientWs, { type: "error", message: "TTS generation failed." });
