@@ -32,22 +32,25 @@ async function speakText(session, text) {
   sendToClient(session.clientWs, { type: "assistant.speaking" });
   let chunkCount = 0;
   let totalAudioBytes = 0;
+  let firstChunkMs = null;
   const ttsStart = Date.now();
   try {
     await streamTTS(clean, (audioBase64) => {
       chunkCount++;
       const bytes = Math.round(audioBase64.length * 0.75);
+      if (firstChunkMs === null) firstChunkMs = Date.now() - ttsStart;
       totalAudioBytes += bytes;
       log.debug("TTS", `audio chunk #${chunkCount}`, { bytes });
       sendToClient(session.clientWs, { type: "assistant.audio.chunk", audio: audioBase64, mimeType: "audio/mpeg" });
     });
-    // Wait until the audio has had time to play on the client before proceeding.
-    // ElevenLabs generation finishes ~835ms, but the audio plays for much longer.
-    // If we don't wait, the next node's speak() tears down the current audio player.
-    const estimatedPlayMs = Math.round(totalAudioBytes / 16); // 128kbps ≈ 16 bytes/ms
+    // Audio starts playing on the client when the first chunk arrives (≈ firstChunkMs from our start).
+    // Estimate when playback ends: firstChunkMs + duration of all audio bytes.
+    // Wait until that point before signalling done, so the next speak() doesn't tear down the player.
     const serverElapsedMs = Date.now() - ttsStart;
-    const waitMs = Math.max(300, estimatedPlayMs - serverElapsedMs + 400);
-    log.info("TTS", "speak done — waiting for playback", { chunks: chunkCount, durationMs: serverElapsedMs, estimatedPlayMs, waitMs });
+    const estimatedPlayMs = Math.round(totalAudioBytes / 16); // 128kbps ≈ 16 bytes/ms
+    const playbackEndsAt = (firstChunkMs ?? serverElapsedMs) + estimatedPlayMs;
+    const waitMs = Math.max(500, playbackEndsAt - serverElapsedMs + 400);
+    log.info("TTS", "speak done — waiting for playback", { chunks: chunkCount, durationMs: serverElapsedMs, estimatedPlayMs, firstChunkMs, waitMs });
     await new Promise((r) => setTimeout(r, waitMs));
   } catch (err) {
     log.error("TTS", "stream failed", { err: err.message });
@@ -75,6 +78,14 @@ function emitWorkflowState(session) {
 
 // Walks the node chain, executing each node until one needs user input or the workflow ends.
 export async function processUntilInput(session) {
+  // Guard: called with null currentNodeId after the last node returned nextNodeId: null
+  if (!session.currentNodeId) {
+    session.workflowCompleted = true;
+    log.info("RUNTIME", "workflow completed");
+    sendToClient(session.clientWs, { type: "workflow.completed" });
+    return;
+  }
+
   const workflow = session.workflow.workflow;
   let safety = 0;
 

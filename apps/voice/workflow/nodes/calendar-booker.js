@@ -1,18 +1,59 @@
-import { slotsToNaturalLanguage, parseSlotSelection } from "../../services/llm.js";
+import { slotsToNaturalLanguage, parseSlotSelection, extractSingleValue } from "../../services/llm.js";
 import { log } from "../../services/log.js";
 
 // Interactive cal.com booking node.
-// enter: fetches slots, speaks them, waits for user to pick one.
-// handleInput: resolves selection, books on confirmed slot, re-prompts if unclear.
+//
+// Works in two modes:
+//   1. Config has attendeeEmailVariable / attendeeNameVariable pointing to filled session vars
+//      → skips inline collection, goes straight to slots.
+//   2. Those config fields are empty or the vars are null (e.g. JSON from builder not yet wired)
+//      → collects email then name inline before fetching slots.
+//
+// Phase stored in session._calBooking.phase:
+//   "need_email"  → waiting for user to provide email
+//   "need_name"   → waiting for user to provide name
+//   "need_slot"   → waiting for user to pick a slot
 
-export async function enter({ session, node, speak, send, interpolate }) {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function resolveEmail(cfg, session) {
+  if (cfg.attendeeEmailVariable && session.variables[cfg.attendeeEmailVariable]?.value) {
+    return session.variables[cfg.attendeeEmailVariable].value;
+  }
+  return session._calBooking?.email || null;
+}
+
+function resolveName(cfg, session) {
+  if (cfg.attendeeNameVariable && session.variables[cfg.attendeeNameVariable]?.value) {
+    return session.variables[cfg.attendeeNameVariable].value;
+  }
+  return session._calBooking?.name || null;
+}
+
+const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
+
+// ─── Advance the booking flow (called from both enter and handleInput) ────────
+
+async function advance(session, node, speak, send, interpolate) {
   const cfg = node.config || {};
-  const attendeeEmail = session.variables[cfg.attendeeEmailVariable]?.value;
-  if (!attendeeEmail) {
-    await speak(session, "I'll need your email address to make a booking.");
-    return { waitForInput: false, nextNodeId: null };
+  const cal = session._calBooking;
+
+  const email = resolveEmail(cfg, session);
+  if (!email) {
+    cal.phase = "need_email";
+    await speak(session, "I'd be happy to help you book an appointment. Could I get your email address?");
+    return { waitForInput: true };
   }
 
+  const name = resolveName(cfg, session);
+  if (!name) {
+    cal.phase = "need_name";
+    await speak(session, "And could I get your full name?");
+    return { waitForInput: true };
+  }
+
+  // Have both — fetch slots.
+  cal.phase = "need_slot";
   const slots = await fetchSlots(node, session, interpolate);
   if (!slots) {
     await speak(session, "I'm having trouble checking availability right now. I'll have the team follow up with you.");
@@ -30,11 +71,45 @@ export async function enter({ session, node, speak, send, interpolate }) {
   return { waitForInput: true };
 }
 
+// ─── Node handlers ────────────────────────────────────────────────────────────
+
+export async function enter({ session, node, speak, send, interpolate }) {
+  session._calBooking = { email: null, name: null, phase: null };
+  return advance(session, node, speak, send, interpolate);
+}
+
 export async function handleInput({ session, node, speak, setVar, send, interpolate }, utterance) {
   const cfg = node.config || {};
   const timezone = cfg.timezone || "UTC";
-  const slots = session.calendarSlots || [];
+  const cal = session._calBooking || {};
 
+  // ── Collecting email ──────────────────────────────────────────────────────
+  if (cal.phase === "need_email") {
+    const match = utterance.match(EMAIL_RE);
+    if (!match) {
+      log.info("CAL", "email not found in utterance", { utterance });
+      await speak(session, "Sorry, I didn't catch a valid email. Could you spell it out?");
+      return { waitForInput: true };
+    }
+    cal.email = match[0];
+    log.info("CAL", "email collected inline", { email: cal.email });
+    return advance(session, node, speak, send, interpolate);
+  }
+
+  // ── Collecting name ───────────────────────────────────────────────────────
+  if (cal.phase === "need_name") {
+    const name = await extractSingleValue(utterance, "caller's full name");
+    if (!name || name.trim().length < 2) {
+      await speak(session, "Sorry, I didn't catch your name. Could you repeat it?");
+      return { waitForInput: true };
+    }
+    cal.name = name.trim();
+    log.info("CAL", "name collected inline", { name: cal.name });
+    return advance(session, node, speak, send, interpolate);
+  }
+
+  // ── Selecting a slot ──────────────────────────────────────────────────────
+  const slots = session.calendarSlots || [];
   const { outcome, slotTime } = await parseSlotSelection(utterance, slots, timezone);
   log.info("CAL", "slot selection", { utterance, outcome, slotTime });
 
@@ -48,7 +123,6 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
   }
 
   if (outcome === "unavailable_time") {
-    // User asked for a specific time that isn't in the available slots — re-offer what we have.
     const freshSlots = await fetchSlots(node, session, interpolate);
     if (freshSlots && freshSlots.length > 0) {
       session.calendarSlots = freshSlots;
@@ -71,7 +145,6 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
       return { waitForInput: false, nextNodeId: null };
     }
     await speak(session, "Sorry, I wasn't able to make that booking. Would you like to try a different time?");
-    // Re-fetch slots and loop
     const freshSlots = await fetchSlots(node, session, interpolate);
     if (freshSlots && freshSlots.length > 0) {
       session.calendarSlots = freshSlots;
@@ -92,6 +165,8 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
   await speak(session, confirmMsg);
   return { waitForInput: false, nextNodeId: node.nextNodeId };
 }
+
+// ─── cal.com API ──────────────────────────────────────────────────────────────
 
 async function fetchSlots(node, session, interpolate) {
   const cfg = node.config || {};
@@ -143,8 +218,8 @@ async function fetchSlots(node, session, interpolate) {
 async function createBooking(node, session, slotTime, interpolate) {
   const cfg = node.config || {};
   const apiKey = interpolate(cfg.calComApiKey || "", session.variables);
-  const attendeeName = session.variables[cfg.attendeeNameVariable]?.value || "Caller";
-  const attendeeEmail = session.variables[cfg.attendeeEmailVariable]?.value;
+  const attendeeName = resolveName(cfg, session) || "Caller";
+  const attendeeEmail = resolveEmail(cfg, session);
 
   log.info("CAL", "createBooking — attempting", {
     eventTypeId: cfg.calComEventTypeId,
