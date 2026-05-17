@@ -1,11 +1,12 @@
 "use client";
 
-import { LogOut, MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { SignOutButton } from "@/components/SignOutButton";
+import { deployWorkflow } from "@/lib/supabase/deployments";
 import {
   deleteWorkflowFromDb,
   duplicateWorkflowInDb,
@@ -23,36 +24,25 @@ function formatRelative(iso: string) {
 }
 
 export default function WorkflowsPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { data: workflows = [], isLoading } = useQuery({
     queryKey: ["workflows"],
     queryFn: listWorkflows,
   });
 
-  const signOut = async () => {
-    const supabase = createClient();
-    if (supabase) await supabase.auth.signOut();
-    router.push("/sign-in");
-  };
-
   return (
     <div className="min-h-screen bg-[var(--bg-base)]">
       <header className="flex h-12 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-6">
         <span className="font-mono text-sm font-medium">Sayerflow</span>
         <div className="flex items-center gap-2">
+          <Link href="/deployments" className="btn-ghost">
+            Deployments
+          </Link>
           <Link href="/workflows/new" className="btn-primary flex items-center gap-1.5">
             <Plus className="h-4 w-4" />
             New workflow
           </Link>
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="rounded p-2 text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)]"
-            aria-label="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          <SignOutButton />
         </div>
       </header>
 
@@ -82,6 +72,9 @@ export default function WorkflowsPage() {
               onMutate={() =>
                 void queryClient.invalidateQueries({ queryKey: ["workflows"] })
               }
+              onDeploy={() =>
+                void queryClient.invalidateQueries({ queryKey: ["deployments"] })
+              }
             />
           ))}
         </div>
@@ -93,6 +86,7 @@ export default function WorkflowsPage() {
 function WorkflowCard({
   workflow,
   onMutate,
+  onDeploy,
 }: {
   workflow: {
     id: string;
@@ -102,9 +96,11 @@ function WorkflowCard({
     nodeCount: number;
   };
   onMutate: () => void;
+  onDeploy: () => void;
 }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [deploying, setDeploying] = useState(false);
 
   return (
     <article className="group relative rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-elevated)] p-5 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_4px_16px_#00000044]">
@@ -147,6 +143,23 @@ function WorkflowCard({
             }}
           >
             Duplicate
+          </button>
+          <button
+            type="button"
+            disabled={deploying}
+            className="block w-full px-3 py-1.5 text-left text-[12px] text-[var(--success)] hover:bg-[var(--bg-hover)] disabled:opacity-40"
+            onClick={async () => {
+              setDeploying(true);
+              try {
+                await deployWorkflow(workflow.id);
+                onDeploy();
+                setMenuOpen(false);
+              } finally {
+                setDeploying(false);
+              }
+            }}
+          >
+            {deploying ? "Deploying…" : "Deploy"}
           </button>
           <button
             type="button"

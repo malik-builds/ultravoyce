@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  LogOut,
   Redo2,
   Save,
   Undo2,
@@ -10,15 +9,14 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { SignOutButton } from "@/components/SignOutButton";
 import { hasBlockingErrors } from "@/lib/workflow/validation";
 import { useWorkflowStore } from "@/store/workflow-store";
 import { GlobalVariablesDrawer } from "./GlobalVariablesDrawer";
 
 export function EditorToolbar() {
-  const router = useRouter();
   const reactFlow = useReactFlow();
   const [zoom, setZoom] = useState(100);
   const [varsOpen, setVarsOpen] = useState(false);
@@ -26,7 +24,9 @@ export function EditorToolbar() {
   const [errorsOpen, setErrorsOpen] = useState(false);
 
   const name = useWorkflowStore((s) => s.name);
+  const description = useWorkflowStore((s) => s.description);
   const setName = useWorkflowStore((s) => s.setName);
+  const setDescription = useWorkflowStore((s) => s.setDescription);
   const isDirty = useWorkflowStore((s) => s.isDirty);
   const isSaving = useWorkflowStore((s) => s.isSaving);
   const saveError = useWorkflowStore((s) => s.saveError);
@@ -79,24 +79,23 @@ export function EditorToolbar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleSave, undo, redo, reactFlow]);
 
-  const signOut = async () => {
-    const supabase = createClient();
-    if (supabase) await supabase.auth.signOut();
-    router.push("/sign-in");
-  };
-
   return (
     <>
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4">
-        <span className="font-mono text-sm font-medium text-[var(--text-primary)]">
+      <header className="shrink-0 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+        <div className="flex h-12 items-center gap-4 px-4">
+        <Link
+          href="/workflows"
+          className="rounded px-1 -mx-1 font-mono text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
+        >
           Sayerflow
-        </span>
+        </Link>
         <span className="h-5 w-px bg-[var(--border-subtle)]" />
         <input
-          className="min-w-0 flex-1 bg-transparent font-mono text-sm text-[var(--text-primary)] outline-none"
+          className="min-w-0 flex-1 bg-transparent font-mono text-sm text-[var(--text-primary)] outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--accent-dim)]"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => pushHistory()}
+          aria-label="Workflow name"
         />
 
         <div className="flex items-center gap-1">
@@ -172,14 +171,7 @@ export function EditorToolbar() {
             Fit
           </button>
           <span className="h-5 w-px bg-[var(--border-subtle)]" />
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="rounded p-2 text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)]"
-            aria-label="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          <SignOutButton />
           <button
             type="button"
             onClick={() => void handleSave()}
@@ -203,12 +195,24 @@ export function EditorToolbar() {
                   : "Save"}
           </button>
         </div>
+        </div>
+
+        <div className="flex border-t border-[var(--border-subtle)] px-4 py-2">
+          <input
+            className="min-w-0 w-full bg-transparent text-[12px] text-[var(--text-secondary)] outline-none placeholder:text-[var(--text-tertiary)] focus-visible:text-[var(--text-primary)] focus-visible:ring-[3px] focus-visible:ring-[var(--accent-dim)]"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={() => pushHistory()}
+            placeholder="Add a description…"
+            aria-label="Workflow description"
+          />
+        </div>
       </header>
 
       <GlobalVariablesDrawer open={varsOpen} onClose={() => setVarsOpen(false)} />
 
       {errorsOpen && blocking && (
-        <div className="absolute left-1/2 top-14 z-50 w-[400px] -translate-x-1/2 rounded-lg border border-[var(--error)] bg-[var(--bg-elevated)] p-4 shadow-xl">
+        <div className="absolute left-1/2 top-[4.5rem] z-50 w-[400px] -translate-x-1/2 rounded-lg border border-[var(--error)] bg-[var(--bg-elevated)] p-4 shadow-xl">
           <p className="mb-2 text-sm font-medium text-[var(--error)]">
             Cannot save — fix these issues:
           </p>

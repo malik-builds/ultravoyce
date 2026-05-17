@@ -6,8 +6,9 @@ export async function middleware(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const pathname = request.nextUrl.pathname;
 
-  const isWorkflowRoute =
-    pathname.startsWith("/workflows") && pathname !== "/sign-in";
+  const isProtectedRoute =
+    pathname.startsWith("/workflows") ||
+    pathname.startsWith("/deployments");
   const isAuthRoute =
     pathname === "/sign-in" || pathname === "/sign-up";
 
@@ -41,7 +42,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && isWorkflowRoute) {
+  if (!user && isProtectedRoute) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
@@ -53,5 +54,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/workflows/:path*", "/sign-in", "/sign-up"],
+  matcher: [
+    "/workflows/:path*",
+    "/deployments",
+    "/deployments/:path*",
+    "/sign-in",
+    "/sign-up",
+  ],
 };
