@@ -77,10 +77,8 @@ All values are read from environment variables. See `.env.example` for the full 
 | `ELEVENLABS_VOICE_ID` | no | `Xb7hH8MSUJpSbSDYk0k2` | TTS voice |
 | `ELEVENLABS_TTS_MODEL` | no | `eleven_flash_v2_5` | TTS model |
 | `OPENAI_TEXT_MODEL` | no | `gpt-4o-mini` | LLM model for all reasoning |
-| `WORKFLOW_PATH` | no | `workflows/default.json` | Local workflow file path |
-| `WORKFLOW_ID` | no | — | If set, load workflow from Supabase instead of file |
-| `SUPABASE_URL` | if `WORKFLOW_ID` set | — | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | if `WORKFLOW_ID` set | — | Bypasses RLS for server-side reads |
+| `SUPABASE_URL` | yes | — | Supabase project URL |
+| `SUPABASE_SECRET_KEY` | yes | — | Service role / secret key for server-side reads (bypasses RLS) |
 | `CAL_COM_API_KEY` | if calendar nodes used | — | cal.com API key |
 | `AUTO_HANGUP_MS` | no | `30000` | Inactivity timeout before auto-hangup |
 | `TTS_TIMEOUT_MS` | no | `15000` | Max time to wait for TTS stream to complete |
@@ -88,9 +86,9 @@ All values are read from environment variables. See `.env.example` for the full 
 | `ALLOW_LOCAL_WEBHOOKS` | no | `false` | Allow `http://` and private-IP webhook URLs |
 | `PORT` | no | `8001` | HTTP listen port |
 
-**Workflow loading priority:** If `WORKFLOW_ID` + `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are all set, the workflow is fetched from Supabase. Otherwise the local file at `WORKFLOW_PATH` is used.
+**Workflow loading:** On each WebSocket connection, the server loads the workflow from Supabase using the `workflowId` query parameter. The workflow must have a deployment row with `deployed = true` (latest row by `created_at`). If not deployed, the HTTP upgrade is rejected with **400**. If the workflow UUID does not exist, the upgrade is rejected with **404**.
 
-**Runtime hot-swap:** A workflow can be replaced at runtime without restarting the server via `POST /workflow`. Active sessions are not affected; the new workflow applies to all new sessions.
+`SUPABASE_SECRET_KEY` may fall back to `SUPABASE_SERVICE_ROLE_KEY` for backward compatibility.
 
 ---
 
@@ -102,7 +100,7 @@ Returns server readiness.
 
 **Response**
 ```json
-{ "ok": true, "workflowLoaded": true }
+{ "ok": true, "supabaseConfigured": true }
 ```
 
 ---
@@ -142,6 +140,28 @@ Returns the currently loaded workflow definition.
 
 ---
 
+### `GET /workflows/deployed`
+
+Returns all workflows that are currently deployed (`deployments.deployed = true`).
+
+**Response**
+```json
+{
+  "ok": true,
+  "workflows": [
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "name": "Receptionist Agent",
+      "description": "Handles inbound calls"
+    }
+  ]
+}
+```
+
+**Error** (502) if Supabase is unreachable.
+
+---
+
 ### `GET /sessions/:sessionId`
 
 Returns saved artifacts for a completed session.
@@ -173,7 +193,18 @@ Returns saved artifacts for a completed session.
 
 ## WebSocket Protocol
 
-Endpoint: `ws://<host>/ws`
+Endpoint: `ws://<host>/ws?workflowId=<uuid>`
+
+**Query parameter:** `workflowId` (required) — UUID of the workflow in Supabase. The workflow must be deployed.
+
+**Upgrade errors** (HTTP response before WebSocket is established):
+
+| Status | Condition | Body |
+|---|---|---|
+| 400 | Missing `workflowId` | `{ "error": "workflowId query parameter is required." }` |
+| 400 | Not deployed | `{ "error": "The workflow has not been deployed" }` |
+| 404 | Workflow not found | `{ "error": "Workflow not found" }` |
+| 502 | Supabase or validation failure | `{ "error": "Failed to load workflow." }` or specific validation message |
 
 All messages are JSON-encoded text frames (never binary).
 
@@ -477,9 +508,10 @@ Actual call transfer is handled by the client or a telephony connector — the b
 
 ```
 bootstrap
-  └── loadWorkflow (file or Supabase)
+  └── require SUPABASE_URL + SUPABASE_SECRET_KEY
 
-client connects → WebSocket /ws
+client connects → WebSocket /ws?workflowId=<uuid>
+  └── loadWorkflow (deployments check + workflows fetch)
   └── createSession()
   └── connectSTT()
   └── stt: session_started
@@ -611,4 +643,5 @@ All LLM calls use `response_format: { type: "json_object" }` where structured ou
 | Session ID validation | `GET /sessions/:id` rejects any ID that does not match UUID format. |
 | Node visit limit | `MAX_NODE_VISITS = 60` per `processUntilInput()` call prevents runaway loops. |
 | Secret interpolation | `{{ secrets.KEY }}` reads from `process.env`, never from workflow JSON. |
-| Supabase access | Uses service role key (server-side only). Never exposed to the browser. |
+| Supabase access | Uses `SUPABASE_SECRET_KEY` (server-side only). Never exposed to the browser. |
+| Deployment gate | Undeployed workflows cannot start a voice session (HTTP 400 on upgrade). |

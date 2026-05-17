@@ -7,36 +7,79 @@ import { fileURLToPath } from "url";
 import { mkdir } from "fs/promises";
 
 import {
-  PORT, RECORDINGS_DIR, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-  DEV_WORKFLOW_PATH, ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY,
+  PORT, RECORDINGS_DIR, SUPABASE_URL, SUPABASE_SECRET_KEY,
+  ALLOW_LOCAL_WEBHOOKS, OPENAI_API_KEY, ELEVENLABS_API_KEY,
 } from "./config.js";
 import { log } from "./services/log.js";
-import { loadFromFile, loadFromSupabase } from "./workflow/loader.js";
+import { loadWorkflow, WorkflowLoadError } from "./workflow/loader.js";
 import { createSession, finalizeSession, sendToClient, startAutoHangupTimer, enforceRecordingCap } from "./workflow/session.js";
 import { processUntilInput, handleUserInput } from "./workflow/runtime.js";
 import { connectSTT, sendAudioChunk } from "./services/stt.js";
 import { healthRouter } from "./routes/health.js";
 import { sessionsRouter } from "./routes/sessions.js";
+import { workflowsRouter } from "./routes/workflows.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessions = new Map();
-const useSupabase = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+
+const HTTP_STATUS_TEXT = {
+  400: "Bad Request",
+  404: "Not Found",
+  502: "Bad Gateway",
+};
+
+function rejectUpgrade(socket, statusCode, message) {
+  const statusText = HTTP_STATUS_TEXT[statusCode] || "Error";
+  const body = JSON.stringify({ error: message });
+  socket.write(
+    `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
+      "Content-Type: application/json\r\n" +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      "Connection: close\r\n" +
+      "\r\n" +
+      body,
+  );
+  socket.destroy();
+}
 
 // ─── Express app ──────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/vendor/three", express.static(path.join(__dirname, "node_modules", "three", "build")));
-app.use(healthRouter(() => useSupabase ? "supabase" : DEV_WORKFLOW_PATH));
+app.use(healthRouter({ supabaseConfigured: true }));
+app.use(workflowsRouter());
 app.use(sessionsRouter());
 
 // ─── WebSocket server ─────────────────────────────────────────────────────────
 const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 * 20 });
 
-server.on("upgrade", (request, socket, head) => {
+server.on("upgrade", async (request, socket, head) => {
   socket.on("error", (err) => console.error("Socket upgrade error:", err));
-  const { pathname } = new URL(request.url, "http://localhost");
-  if (pathname !== "/ws") { socket.destroy(); return; }
+
+  const { pathname, searchParams } = new URL(request.url, "http://localhost");
+  if (pathname !== "/ws") {
+    socket.destroy();
+    return;
+  }
+
+  const workflowId = searchParams.get("workflowId");
+  if (!workflowId) {
+    rejectUpgrade(socket, 400, "workflowId query parameter is required.");
+    return;
+  }
+
+  try {
+    request.workflowDefinition = await loadWorkflow(workflowId);
+  } catch (err) {
+    const status = err instanceof WorkflowLoadError ? err.statusCode : 502;
+    const message =
+      err instanceof WorkflowLoadError ? err.message : "Failed to load workflow.";
+    console.error("Workflow load failed:", err);
+    rejectUpgrade(socket, status, message);
+    return;
+  }
+
   wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
 });
 
@@ -49,26 +92,10 @@ wss.on("connection", async (ws, request) => {
 
   ws.on("error", (err) => console.error("WebSocket error:", err));
 
-  // Load the workflow for this connection
-  let workflowDefinition;
-  try {
-    if (useSupabase) {
-      const url = new URL(request.url, "http://localhost");
-      const workflowId = url.searchParams.get("workflowId");
-      if (!workflowId) {
-        sendToClient(ws, { type: "error", message: "workflowId query parameter is required." });
-        ws.close(1008, "missing workflowId");
-        return;
-      }
-      workflowDefinition = await loadFromSupabase(workflowId);
-    } else {
-      // Dev mode: load the default local file regardless of query params
-      workflowDefinition = await loadFromFile(DEV_WORKFLOW_PATH);
-    }
-  } catch (err) {
-    console.error("Workflow load failed:", err);
-    sendToClient(ws, { type: "error", message: err.message || "Failed to load workflow." });
-    ws.close(1011, "workflow load failed");
+  const workflowDefinition = request.workflowDefinition;
+  if (!workflowDefinition) {
+    sendToClient(ws, { type: "error", message: "Workflow was not loaded for this connection." });
+    ws.close(1011, "workflow not loaded");
     return;
   }
 
@@ -204,11 +231,15 @@ wss.on("connection", async (ws, request) => {
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 async function bootstrap() {
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+    console.error("SUPABASE_URL and SUPABASE_SECRET_KEY are required.");
+    process.exit(1);
+  }
+
   await mkdir(RECORDINGS_DIR, { recursive: true });
   server.listen(PORT, () => {
-    const mode = useSupabase ? "Supabase (per-connection)" : `dev file: ${DEV_WORKFLOW_PATH}`;
     console.log(`Voice server listening on http://localhost:${PORT}`);
-    console.log(`Workflow source: ${mode}`);
+    console.log("Workflow source: Supabase (per-connection, deployment required)");
     if (ALLOW_LOCAL_WEBHOOKS) console.warn("⚠️  ALLOW_LOCAL_WEBHOOKS=true — local webhook URLs are permitted");
   });
 }

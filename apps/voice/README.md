@@ -4,8 +4,8 @@ Express + WebSocket realtime voice assistant with workflow-node execution:
 
 - Browser streams live PCM mic audio to backend over WebSocket.
 - ElevenLabs realtime STT provides partial/final transcripts.
-- Runtime executes nodes from a workflow JSON (`workflows/default.json`).
-- Required fields in `get_details` are enforced before node progression.
+- Runtime executes nodes from a workflow loaded from Supabase (`workflows` table).
+- The workflow must be **deployed** in the builder (`deployments.deployed = true`) before a call can start.
 - OpenAI is used for extraction, branching, and knowledge responses.
 - ElevenLabs streams TTS audio back to the browser for conversational speed.
 - User can end call manually with "Decline Call"; fallback auto-hangup is enabled.
@@ -24,6 +24,8 @@ cp .env.example .env
 
 Set your env values:
 
+- `SUPABASE_URL` (required)
+- `SUPABASE_SECRET_KEY` (required — service role key for server-side reads)
 - `OPENAI_API_KEY` (required)
 - `ELEVENLABS_API_KEY` (required)
 
@@ -34,14 +36,14 @@ cd apps/voice
 npm run dev
 ```
 
-Open [http://localhost:8001](http://localhost:8001).
+Open [http://localhost:8001](http://localhost:8001) and pick a deployed workflow from the list.
 
-## Workflow editing (phase 1)
+List deployed workflows: `GET /workflows/deployed`
 
-Update [`workflows/default.json`](workflows/default.json) to change:
+WebSocket endpoint: `ws://localhost:8001/ws?workflowId=YOUR-WORKFLOW-UUID`
 
-- node order (`nextNodeId`)
-- required fields in `get_details`
-- messages and switch branches
+If the workflow is not deployed, the server responds with HTTP **400** and `{ "error": "The workflow has not been deployed" }`.
 
-The runtime emits live `workflow.state` so you can verify node entry and mandatory-field completion during calls.
+## Workflow editing
+
+Create and edit workflows in the builder app (`apps/builder`). Deploy a workflow from the workflows list before testing voice calls.

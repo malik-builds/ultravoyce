@@ -1,9 +1,9 @@
 import { Router } from "express";
 
-export function healthRouter(getWorkflow) {
+export function healthRouter({ supabaseConfigured = false } = {}) {
   const router = Router();
   router.get("/health", (_req, res) => {
-    res.json({ ok: true, workflowLoaded: Boolean(getWorkflow()?.workflow?.id) });
+    res.json({ ok: true, supabaseConfigured });
   });
   return router;
 }
