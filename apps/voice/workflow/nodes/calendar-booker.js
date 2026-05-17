@@ -112,21 +112,32 @@ export async function handleInput({ session, node, speak, setVar, send, interpol
 
   // ── Collecting email ──────────────────────────────────────────────────────
   if (cal.phase === "need_email") {
-    const match = utterance.match(EMAIL_RE);
-    if (!match) {
+    // Try regex first (handles typed/pasted emails)
+    let email = utterance.match(EMAIL_RE)?.[0] ?? null;
+
+    // LLM normalization for spoken formats: "malik at gmail dot com" → "malik@gmail.com"
+    if (!email) {
+      const raw = await extractSingleValue(
+        utterance,
+        'email address — convert spoken format to standard: "user at domain dot com" → "user@domain.com"'
+      );
+      if (raw && EMAIL_RE.test(raw.trim())) email = raw.trim();
+    }
+
+    if (!email) {
       cal.emailFailCount = (cal.emailFailCount || 0) + 1;
       log.info("CAL", "email not found in utterance", { utterance, failCount: cal.emailFailCount });
       if (cal.emailFailCount >= 2) {
-        // Two failed attempts — switch to phone fallback instead.
         cal.phase = null;
         cal.fallbackPhase = "need_phone";
         await speak(session, "No problem. Could I take your phone number instead and we'll be in touch to arrange a time?");
         return { waitForInput: true };
       }
-      await speak(session, "Sorry, I didn't catch a valid email. Could you spell it out for me?");
+      await speak(session, "Sorry, I didn't catch that. Could you say your email again, spelling it out if needed?");
       return { waitForInput: true };
     }
-    cal.email = match[0];
+
+    cal.email = email;
     cal.emailFailCount = 0;
     log.info("CAL", "email collected inline", { email: cal.email });
     upsertBookingLead(session, { email: cal.email });

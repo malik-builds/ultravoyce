@@ -38,8 +38,10 @@ export async function handleInput({ session, node, speak }, utterance) {
     lc.contact = emailMatch?.[0] || phoneMatch?.[0] || null;
 
     if (!lc.contact) {
-      // Try LLM extraction as fallback
-      const extracted = await extractSingleValue(utterance, "phone number or email address");
+      const extracted = await extractSingleValue(
+        utterance,
+        'email address or phone number — if email is spoken as "user at domain dot com" normalize to "user@domain.com"'
+      );
       lc.contact = extracted || null;
     }
 
