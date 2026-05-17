@@ -20,8 +20,15 @@ export async function handleInput({ session, node, speak }, utterance) {
   const lc = session._leadCapture;
 
   if (lc?.phase === "need_name") {
-    const name = await extractSingleValue(utterance, "caller's full name");
-    if (!name || name.trim().length < 2) {
+    let name = await extractSingleValue(
+      utterance,
+      "person's name — extract just the name even if the utterance is a full sentence like \"it's John Smith\" or \"my name is Sarah\""
+    );
+    if (!name) {
+      const raw = utterance.trim();
+      if (raw.length > 0 && raw.length <= 50 && !/[@\d]/.test(raw)) name = raw;
+    }
+    if (!name || name.trim().length < 1) {
       await speak(session, "Sorry, I didn't catch your name. Could you repeat it?");
       return { waitForInput: true };
     }
