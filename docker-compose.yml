@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  voice:
+    build:
+      context: .
+      dockerfile: apps/voice/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - NODE_ENV=production
+      - PORT=8001
